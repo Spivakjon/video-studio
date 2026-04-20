@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <title>{{PROJECT_NAME}}</title>
+  <style>
+    :root {
+      --navy: #0B1F3A;
+      --navy-lift: #1A3459;
+      --white: #FFFFFF;
+      --cream: #F4F1EC;
+      --orange: #FF6B35;
+      --green: #00D68F;
+      --mute: #AEC0D9;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      width: 100%; height: 100%;
+      background: var(--navy);
+      color: var(--white);
+      font-family: 'Heebo', sans-serif;
+      overflow: hidden;
+    }
+    #stage {
+      position: relative;
+      width: 1920px; height: 1080px;
+      background:
+        radial-gradient(ellipse 1200px 600px at 50% -200px, rgba(255, 107, 53, 0.12), transparent 70%),
+        var(--navy);
+      overflow: hidden;
+    }
+
+    .brand-mark {
+      position: absolute;
+      bottom: 48px;
+      left: 96px;
+      font-family: 'Rubik', sans-serif;
+      font-weight: 700;
+      font-size: 26px;
+      letter-spacing: 0.12em;
+      color: var(--mute);
+      z-index: 50;
+      direction: ltr;
+    }
+
+    .scene {
+      position: absolute;
+      inset: 0;
+      width: 1920px; height: 1080px;
+      overflow: hidden;
+    }
+
+    .split-scene {
+      display: grid;
+      grid-template-columns: 58% 42%;
+      direction: ltr;
+    }
+    .product-pane {
+      position: relative;
+      background: var(--cream);
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .product-pane > img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      object-position: center;
+    }
+    .content-pane {
+      position: relative;
+      direction: rtl;
+      padding: 96px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      background: var(--navy);
+    }
+
+    .step-row {
+      display: flex;
+      align-items: baseline;
+      gap: 18px;
+      direction: ltr;
+      margin-bottom: 40px;
+    }
+    .step-label {
+      font-family: 'Heebo', sans-serif;
+      font-weight: 500;
+      font-size: 26px;
+      color: var(--mute);
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+    }
+    .step-number {
+      font-family: 'Rubik', sans-serif;
+      font-weight: 900;
+      font-size: 140px;
+      line-height: 0.9;
+      color: var(--orange);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .step-title {
+      font-family: 'Rubik', sans-serif;
+      font-weight: 900;
+      font-size: 88px;
+      line-height: 1.05;
+      color: var(--white);
+      margin-bottom: 32px;
+    }
+    .step-caption {
+      font-family: 'Heebo', sans-serif;
+      font-weight: 400;
+      font-size: 32px;
+      line-height: 1.45;
+      color: var(--mute);
+    }
+
+    /* ============ Scene 1: Intro ============ */
+    #s1 {
+      display: grid;
+      grid-template-columns: 55% 45%;
+      direction: ltr;
+    }
+    #s1 .intro-pane-product {
+      background: var(--cream);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+    #s1 .intro-pane-product img {
+      width: 92%;
+      height: 92%;
+      object-fit: contain;
+    }
+    #s1 .intro-pane-text {
+      direction: rtl;
+      background: var(--navy);
+      padding: 120px 96px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+    .intro-wordmark {
+      font-family: 'Rubik', sans-serif;
+      font-weight: 900;
+      font-size: 200px;
+      line-height: 0.9;
+      letter-spacing: -0.02em;
+      color: var(--white);
+      direction: ltr;
+    }
+    .intro-rule {
+      width: 180px;
+      height: 8px;
+      background: var(--orange);
+      margin: 36px 0;
+      border-radius: 2px;
+    }
+    .intro-sub {
+      font-family: 'Heebo', sans-serif;
+      font-weight: 500;
+      font-size: 44px;
+      color: var(--mute);
+    }
+
+    /* ============ Annotation overlays ============ */
+    .anno {
+      position: absolute;
+      pointer-events: none;
+    }
+
+    /* Scene 2 — ISOFIX highlight */
+    #s2-highlight {
+      left: 40%;
+      top: 70%;
+      width: 320px;
+      height: 130px;
+      border: 6px solid var(--orange);
+      border-radius: 20px;
+      box-shadow: 0 0 40px rgba(255, 107, 53, 0.5);
+    }
+    #s2-click {
+      position: absolute;
+      left: 40%;
+      top: 58%;
+      font-family: 'Rubik', sans-serif;
+      font-weight: 900;
+      font-size: 64px;
+      color: var(--orange);
+      letter-spacing: 0.04em;
+      direction: ltr;
+      opacity: 0;
+      text-shadow: 0 4px 24px rgba(0,0,0,0.5);
+    }
+
+    /* Scene 3 — Push arrows */
+    .push-arrow {
+      position: absolute;
+      width: 140px;
+      height: 16px;
+      background: var(--orange);
+      border-radius: 4px;
+    }
+    .push-arrow::after {
+      content: '';
+      position: absolute;
+      right: -22px;
+      top: -14px;
+      width: 0; height: 0;
+      border-left: 30px solid var(--orange);
+      border-top: 22px solid transparent;
+      border-bottom: 22px solid transparent;
+    }
+    #s3-arrow-1 { left: 8%; top: 50%; }
+    #s3-arrow-2 { left: 8%; top: 62%; opacity: 0.7; }
+
+    /* Scene 4 — Top tether highlight */
+    #s4-tether-line {
+      position: absolute;
+      left: 7%;
+      top: 38%;
+      width: 260px;
+      height: 8px;
+      background: var(--orange);
+      border-radius: 3px;
+      transform-origin: left center;
+      transform: rotate(28deg);
+      box-shadow: 0 0 20px rgba(255, 107, 53, 0.7);
+    }
+    #s4-highlight {
+      left: 2%;
+      top: 40%;
+      width: 220px;
+      height: 220px;
+      border: 6px solid var(--orange);
+      border-radius: 50%;
+      box-shadow: 0 0 50px rgba(255, 107, 53, 0.5);
+    }
+
+    /* Scene 5 — Verification markers */
+    .check-dot {
+      position: absolute;
+      width: 92px; height: 92px;
+      border-radius: 50%;
+      background: var(--green);
+      border: 6px solid var(--white);
+      box-shadow: 0 0 50px rgba(0, 214, 143, 0.75);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .check-dot::after {
+      content: '';
+      width: 28px;
+      height: 52px;
+      border-right: 9px solid var(--navy);
+      border-bottom: 9px solid var(--navy);
+      transform: rotate(45deg) translate(-6px, -8px);
+    }
+    #s5-dot-1 { left: 44%; top: 72%; }
+    #s5-dot-2 { left: 54%; top: 72%; }
+    #s5-dot-3 { left: 4%; top: 48%; }
+
+    /* ============ Scene 6: Outro ============ */
+    #s6 {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      padding: 96px;
+    }
+    #s6::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: url('assets/install.jpg') center/cover no-repeat;
+      opacity: 0.18;
+      filter: blur(3px);
+    }
+    #s6::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(ellipse at center, transparent 30%, rgba(11, 31, 58, 0.85) 70%);
+    }
+    .outro-content {
+      position: relative;
+      text-align: center;
+      z-index: 2;
+    }
+    .outro-brand {
+      font-family: 'Rubik', sans-serif;
+      font-weight: 900;
+      font-size: 220px;
+      letter-spacing: 0.04em;
+      color: var(--white);
+      direction: ltr;
+    }
+    .outro-tag {
+      margin-top: 24px;
+      font-family: 'Heebo', sans-serif;
+      font-weight: 500;
+      font-size: 56px;
+      color: var(--orange);
+    }
+    .outro-product {
+      margin-top: 40px;
+      font-family: 'Rubik', sans-serif;
+      font-weight: 700;
+      font-size: 36px;
+      letter-spacing: 0.24em;
+      color: var(--mute);
+      direction: ltr;
+      text-transform: uppercase;
+    }
+
+    /* ============ Transitions ============ */
+    .transition {
+      position: absolute;
+      inset: 0;
+      width: 1920px; height: 1080px;
+      pointer-events: none;
+      z-index: 50;
+      overflow: hidden;
+    }
+    .transition-cover {
+      position: absolute;
+      top: 0;
+      width: 140%; height: 100%;
+      background: var(--navy);
+    }
+  </style>
+</head>
+<body>
+
+  <div id="stage" data-composition-id="ivan-install" data-start="0" data-duration="31.2" data-width="1920" data-height="1080">
+
+    <span class="brand-mark" id="brand-mark">{{BRAND_UPPER}} · {{PROJECT_NAME_UPPER}}</span>
+
+    <!-- AUDIO -->
+    <audio id="a1" class="clip" data-start="0.15" data-duration="3.84" data-track-index="10" src="audio/01-intro.wav"></audio>
+    <audio id="a2" class="clip" data-start="4.35" data-duration="6.29" data-track-index="10" src="audio/02-isofix.wav"></audio>
+    <audio id="a3" class="clip" data-start="10.95" data-duration="5.28" data-track-index="10" src="audio/03-push.wav"></audio>
+    <audio id="a4" class="clip" data-start="16.45" data-duration="6.29" data-track-index="10" src="audio/04-tether.wav"></audio>
+    <audio id="a5" class="clip" data-start="22.95" data-duration="5.14" data-track-index="10" src="audio/05-verify.wav"></audio>
+    <audio id="a6" class="clip" data-start="28.25" data-duration="2.89" data-track-index="10" src="audio/06-outro.wav"></audio>
+
+    <!-- SCENE 1: INTRO -->
+    <div id="s1" class="scene clip" data-start="0" data-duration="4.2" data-track-index="1">
+      <div class="intro-pane-product">
+        <img src="assets/hero.gif" alt="" id="s1-img"/>
+      </div>
+      <div class="intro-pane-text">
+        <div class="intro-wordmark" id="s1-word">[שם המוצר]</div>
+        <div class="intro-rule" id="s1-rule"></div>
+        <div class="intro-sub" id="s1-sub">[כותרת משנה — לדוגמה: התקנה בארבעה שלבים]</div>
+      </div>
+    </div>
+
+    <!-- SCENE 2: ISOFIX -->
+    <div id="s2" class="scene split-scene clip" data-start="4.2" data-duration="6.6" data-track-index="1">
+      <div class="product-pane">
+        <img src="assets/install.jpg" alt=""/>
+        <div class="anno" id="s2-highlight"></div>
+        <div id="s2-click">CLICK</div>
+      </div>
+      <div class="content-pane">
+        <div class="step-row"><span class="step-label">Step</span><span class="step-number">01</span></div>
+        <div class="step-title" id="s2-title">[שלב 1 — כותרת]</div>
+        <div class="step-caption" id="s2-caption">[תיאור שלב 1 — מה על המשתמש לעשות]</div>
+      </div>
+    </div>
+
+    <!-- SCENE 3: PUSH -->
+    <div id="s3" class="scene split-scene clip" data-start="10.8" data-duration="5.5" data-track-index="1">
+      <div class="product-pane">
+        <img src="assets/install.jpg" alt=""/>
+        <div class="anno push-arrow" id="s3-arrow-1"></div>
+        <div class="anno push-arrow" id="s3-arrow-2"></div>
+      </div>
+      <div class="content-pane">
+        <div class="step-row"><span class="step-label">Step</span><span class="step-number">02</span></div>
+        <div class="step-title" id="s3-title">[שלב 2 — כותרת]</div>
+        <div class="step-caption" id="s3-caption">[תיאור שלב 2 — מה על המשתמש לעשות]</div>
+      </div>
+    </div>
+
+    <!-- SCENE 4: TOP TETHER -->
+    <div id="s4" class="scene split-scene clip" data-start="16.3" data-duration="6.5" data-track-index="1">
+      <div class="product-pane">
+        <img src="assets/install.jpg" alt=""/>
+        <div class="anno" id="s4-tether-line"></div>
+        <div class="anno" id="s4-highlight"></div>
+      </div>
+      <div class="content-pane">
+        <div class="step-row"><span class="step-label">Step</span><span class="step-number">03</span></div>
+        <div class="step-title" id="s4-title">[שלב 3 — כותרת]</div>
+        <div class="step-caption" id="s4-caption">[תיאור שלב 3 — מה על המשתמש לעשות]</div>
+      </div>
+    </div>
+
+    <!-- SCENE 5: VERIFY -->
+    <div id="s5" class="scene split-scene clip" data-start="22.8" data-duration="5.35" data-track-index="1">
+      <div class="product-pane">
+        <img src="assets/install.jpg" alt=""/>
+        <div class="anno check-dot" id="s5-dot-1"></div>
+        <div class="anno check-dot" id="s5-dot-2"></div>
+        <div class="anno check-dot" id="s5-dot-3"></div>
+      </div>
+      <div class="content-pane">
+        <div class="step-row"><span class="step-label">Step</span><span class="step-number">04</span></div>
+        <div class="step-title" id="s5-title">[בדיקה / אימות]</div>
+        <div class="step-caption" id="s5-caption">[תיאור שלב האימות — על מה להסתכל כדי לוודא שהכל בסדר]</div>
+      </div>
+    </div>
+
+    <!-- SCENE 6: OUTRO -->
+    <div id="s6" class="scene clip" data-start="28.2" data-duration="3.0" data-track-index="1">
+      <div class="outro-content">
+        <div class="outro-brand" id="s6-brand">{{BRAND_UPPER}}</div>
+        <div class="outro-tag" id="s6-tag">[סלוגן סיום]</div>
+        <div class="outro-product" id="s6-product">[שם מוצר · קטגוריה]</div>
+      </div>
+    </div>
+
+    <!-- TRANSITIONS -->
+    <div id="t1" class="transition clip" data-start="4.0" data-duration="0.6" data-track-index="2">
+      <div class="transition-cover" id="t1-cover"></div>
+    </div>
+    <div id="t2" class="transition clip" data-start="10.6" data-duration="0.6" data-track-index="2">
+      <div class="transition-cover" id="t2-cover"></div>
+    </div>
+    <div id="t3" class="transition clip" data-start="16.1" data-duration="0.6" data-track-index="2">
+      <div class="transition-cover" id="t3-cover"></div>
+    </div>
+    <div id="t4" class="transition clip" data-start="22.6" data-duration="0.6" data-track-index="2">
+      <div class="transition-cover" id="t4-cover"></div>
+    </div>
+    <div id="t5" class="transition clip" data-start="28.0" data-duration="0.6" data-track-index="2">
+      <div class="transition-cover" id="t5-cover"></div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <script>
+      window.__timelines = window.__timelines || {};
+      const tl = gsap.timeline({ paused: true });
+
+      /* SCENE 1 */
+      tl.from("#s1 .intro-pane-product img", { opacity: 0, scale: 1.08, duration: 0.9, ease: "expo.out", transformOrigin: "center" }, 0.1);
+      tl.from("#s1-word", { y: 60, opacity: 0, duration: 0.8, ease: "expo.out" }, 0.5);
+      tl.from("#s1-rule", { scaleX: 0, transformOrigin: "left center", duration: 0.6, ease: "power3.out" }, 0.9);
+      tl.from("#s1-sub", { y: 30, opacity: 0, duration: 0.7, ease: "power2.out" }, 1.1);
+
+      /* TRANSITION 1 */
+      tl.fromTo("#t1-cover", { x: "100%" }, { x: "-40%", duration: 0.6, ease: "power3.inOut" }, 4.0);
+
+      /* SCENE 2: ISOFIX */
+      tl.from("#s2 .product-pane > img", { opacity: 0, scale: 1.06, duration: 0.8, ease: "power3.out", transformOrigin: "center" }, 4.35);
+      tl.from("#s2 .step-label", { opacity: 0, y: -20, duration: 0.5, ease: "power2.out" }, 4.5);
+      tl.from("#s2 .step-number", { opacity: 0, y: 30, duration: 0.7, ease: "expo.out" }, 4.6);
+      tl.from("#s2 .step-title", { opacity: 0, x: -40, duration: 0.7, ease: "power3.out" }, 4.8);
+      tl.from("#s2 .step-caption", { opacity: 0, x: -30, duration: 0.6, ease: "power2.out" }, 5.0);
+      tl.fromTo("#s2-highlight",
+        { opacity: 0, scale: 1.4 },
+        { opacity: 1, scale: 1, duration: 0.5, ease: "back.out(1.6)", transformOrigin: "center" }, 6.2);
+      tl.to("#s2-highlight", { scale: 1.04, duration: 0.6, ease: "sine.inOut", yoyo: true, repeat: 1 }, 6.9);
+      tl.fromTo("#s2-click",
+        { opacity: 0, scale: 0.5 },
+        { opacity: 1, scale: 1, duration: 0.4, ease: "back.out(2)" }, 7.8);
+      tl.to("#s2-click", { scale: 1.08, duration: 0.15, ease: "power1.inOut", yoyo: true, repeat: 1 }, 8.2);
+
+      /* TRANSITION 2 */
+      tl.fromTo("#t2-cover", { x: "100%" }, { x: "-40%", duration: 0.6, ease: "power3.inOut" }, 10.6);
+
+      /* SCENE 3: PUSH */
+      tl.from("#s3 .product-pane > img", { opacity: 0, scale: 1.06, duration: 0.8, ease: "power3.out", transformOrigin: "center" }, 10.95);
+      tl.from("#s3 .step-label", { opacity: 0, y: -20, duration: 0.5, ease: "power2.out" }, 11.1);
+      tl.from("#s3 .step-number", { opacity: 0, y: 30, duration: 0.7, ease: "expo.out" }, 11.2);
+      tl.from("#s3 .step-title", { opacity: 0, x: -40, duration: 0.7, ease: "power3.out" }, 11.4);
+      tl.from("#s3 .step-caption", { opacity: 0, x: -30, duration: 0.6, ease: "power2.out" }, 11.6);
+      tl.fromTo("#s3-arrow-1", { opacity: 0, x: -80 }, { opacity: 1, x: 0, duration: 0.5, ease: "power2.out" }, 12.3);
+      tl.fromTo("#s3-arrow-2", { opacity: 0, x: -80 }, { opacity: 0.7, x: 0, duration: 0.5, ease: "power2.out" }, 12.5);
+      tl.to(["#s3-arrow-1", "#s3-arrow-2"], { x: 60, duration: 0.7, ease: "power2.inOut", stagger: 0.08, overwrite: "auto" }, 13.3);
+      tl.to("#s3 .product-pane > img", { scale: 1.02, duration: 0.7, ease: "power2.inOut", transformOrigin: "center" }, 13.3);
+
+      /* TRANSITION 3 */
+      tl.fromTo("#t3-cover", { x: "100%" }, { x: "-40%", duration: 0.6, ease: "power3.inOut" }, 16.1);
+
+      /* SCENE 4: TOP TETHER */
+      tl.from("#s4 .product-pane > img", { opacity: 0, scale: 1.06, duration: 0.8, ease: "power3.out", transformOrigin: "center" }, 16.45);
+      tl.from("#s4 .step-label", { opacity: 0, y: -20, duration: 0.5, ease: "power2.out" }, 16.6);
+      tl.from("#s4 .step-number", { opacity: 0, y: 30, duration: 0.7, ease: "expo.out" }, 16.7);
+      tl.from("#s4 .step-title", { opacity: 0, x: -40, duration: 0.7, ease: "power3.out" }, 16.9);
+      tl.from("#s4 .step-caption", { opacity: 0, x: -30, duration: 0.6, ease: "power2.out" }, 17.1);
+      tl.fromTo("#s4-tether-line",
+        { scaleX: 0 },
+        { scaleX: 1, duration: 1.2, ease: "power2.out" }, 18.0);
+      tl.fromTo("#s4-highlight",
+        { opacity: 0, scale: 1.6 },
+        { opacity: 1, scale: 1, duration: 0.6, ease: "back.out(1.6)", transformOrigin: "center" }, 19.5);
+      tl.to("#s4-highlight", { scale: 1.08, duration: 0.6, ease: "sine.inOut", yoyo: true, repeat: 1 }, 20.3);
+
+      /* TRANSITION 4 */
+      tl.fromTo("#t4-cover", { x: "100%" }, { x: "-40%", duration: 0.6, ease: "power3.inOut" }, 22.6);
+
+      /* SCENE 5: VERIFY */
+      tl.from("#s5 .product-pane > img", { opacity: 0, scale: 1.06, duration: 0.8, ease: "power3.out", transformOrigin: "center" }, 22.95);
+      tl.from("#s5 .step-label", { opacity: 0, y: -20, duration: 0.5, ease: "power2.out" }, 23.1);
+      tl.from("#s5 .step-number", { opacity: 0, y: 30, duration: 0.7, ease: "expo.out" }, 23.2);
+      tl.from("#s5 .step-title", { opacity: 0, x: -40, duration: 0.7, ease: "power3.out" }, 23.4);
+      tl.from("#s5 .step-caption", { opacity: 0, x: -30, duration: 0.6, ease: "power2.out" }, 23.6);
+      tl.fromTo("#s5-dot-1", { opacity: 0, scale: 0 }, { opacity: 1, scale: 1, duration: 0.4, ease: "back.out(2.2)", transformOrigin: "center" }, 24.4);
+      tl.fromTo("#s5-dot-2", { opacity: 0, scale: 0 }, { opacity: 1, scale: 1, duration: 0.4, ease: "back.out(2.2)", transformOrigin: "center" }, 24.8);
+      tl.fromTo("#s5-dot-3", { opacity: 0, scale: 0 }, { opacity: 1, scale: 1, duration: 0.4, ease: "back.out(2.2)", transformOrigin: "center" }, 25.2);
+
+      /* TRANSITION 5 */
+      tl.fromTo("#t5-cover", { x: "100%" }, { x: "-40%", duration: 0.6, ease: "power3.inOut" }, 28.0);
+
+      /* SCENE 6: OUTRO */
+      tl.from("#s6 .outro-brand", { opacity: 0, y: 40, scale: 0.96, duration: 0.8, ease: "expo.out" }, 28.4);
+      tl.from("#s6 .outro-tag", { opacity: 0, y: 20, duration: 0.6, ease: "power2.out" }, 28.8);
+      tl.from("#s6 .outro-product", { opacity: 0, letterSpacing: "0.4em", duration: 0.7, ease: "power2.out" }, 29.1);
+      tl.to("#s6 .outro-content > *", { opacity: 0, y: -20, duration: 0.5, ease: "power2.in", stagger: 0.05 }, 30.6);
+
+      window.__timelines["ivan-install"] = tl;
+    </script>
+  </div>
+
+</body>
+</html>

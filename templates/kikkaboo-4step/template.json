@@ -1,0 +1,15 @@
+{
+  "name": "kikkaboo-4step",
+  "title": "Kikkaboo 4-Step Instructional",
+  "description": "Six-scene product installation/instruction video. Intro + 4 numbered steps + verification + brand outro. Hebrew RTL, split-pane layout with product image on one side and content on the other.",
+  "brand": "kikkaboo",
+  "aspectRatio": "16:9",
+  "resolution": "1920x1080",
+  "language": "he",
+  "duration": "~31s",
+  "defaultVoice": "Charon",
+  "requiredAssets": [
+    { "path": "assets/hero.gif", "description": "Product hero shot (360° rotation GIF recommended, or static image)" },
+    { "path": "assets/install.jpg", "description": "Product installed/in-use photo — used for steps 2-5 and outro background" }
+  ]
+}

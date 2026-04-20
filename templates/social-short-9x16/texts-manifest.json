@@ -1,0 +1,28 @@
+{
+  "project": "{{PROJECT_NAME}}",
+  "brand": "{{BRAND}}",
+  "language": "he",
+  "ttsVoice": "Charon",
+  "items": [
+    { "id": "brand-mark", "scene": 0, "kind": "screen",    "label": "מותג (פינה)",          "elementId": "brand-mark", "value": "{{BRAND_UPPER}}" },
+
+    { "id": "s1-hook",    "scene": 1, "kind": "screen",    "label": "סצנה 1 — Hook (גדול)", "elementId": "s1-hook",    "value": "[שאלה שתופסת — למשל: טעות נפוצה שמסכנת?]" },
+    { "id": "s1-sub",     "scene": 1, "kind": "screen",    "label": "סצנה 1 — תת-כותרת",   "elementId": "s1-sub",     "value": "[הבטחה — לדוגמה: 2 דקות וזה מאחוריך]" },
+    { "id": "vo-01",      "scene": 1, "kind": "voiceover", "label": "סצנה 1 — קריינות",    "audioFile": "01-hook.wav", "value": "[הקריינות של ההוק — נועז, קצר, מעורר עניין]" },
+
+    { "id": "s2-num",     "scene": 2, "kind": "screen",    "label": "סצנה 2 — מספר",        "elementId": "s2-num",     "value": "01" },
+    { "id": "s2-title",   "scene": 2, "kind": "screen",    "label": "סצנה 2 — כותרת",       "elementId": "s2-title",   "value": "[טיפ 1 — כותרת]" },
+    { "id": "s2-caption", "scene": 2, "kind": "screen",    "label": "סצנה 2 — תיאור",       "elementId": "s2-caption", "value": "[מה לעשות בפועל]" },
+    { "id": "vo-02",      "scene": 2, "kind": "voiceover", "label": "סצנה 2 — קריינות",    "audioFile": "02-tip1.wav","value": "[הקריינות של טיפ 1]" },
+
+    { "id": "s3-num",     "scene": 3, "kind": "screen",    "label": "סצנה 3 — מספר",        "elementId": "s3-num",     "value": "02" },
+    { "id": "s3-title",   "scene": 3, "kind": "screen",    "label": "סצנה 3 — כותרת",       "elementId": "s3-title",   "value": "[טיפ 2 — כותרת]" },
+    { "id": "s3-caption", "scene": 3, "kind": "screen",    "label": "סצנה 3 — תיאור",       "elementId": "s3-caption", "value": "[מה לעשות בפועל]" },
+    { "id": "vo-03",      "scene": 3, "kind": "voiceover", "label": "סצנה 3 — קריינות",    "audioFile": "03-tip2.wav","value": "[הקריינות של טיפ 2]" },
+
+    { "id": "s4-title",   "scene": 4, "kind": "screen",    "label": "סצנה 4 — CTA כותרת",   "elementId": "s4-title",   "value": "[פעולה — לדוגמה: קבלו מדריך מלא]" },
+    { "id": "s4-cta",     "scene": 4, "kind": "screen",    "label": "סצנה 4 — כפתור",      "elementId": "s4-cta",     "value": "לחץ כאן" },
+    { "id": "s4-brand",   "scene": 4, "kind": "screen",    "label": "סצנה 4 — מותג",        "elementId": "s4-brand",   "value": "{{BRAND_UPPER}}" },
+    { "id": "vo-04",      "scene": 4, "kind": "voiceover", "label": "סצנה 4 — קריינות",    "audioFile": "04-cta.wav", "value": "[הקריינות של ה-CTA — חם, מזמין]" }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "name": "video-studio",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Video production platform — creates marketing/instructional videos for business projects (Kikkaboo, Dubai safe rooms, future). Built on HyperFrames + Gemini TTS.",
+  "scripts": {
+    "studio": "node tools/editor/server.mjs",
+    "tts": "node tools/tts.mjs",
+    "scaffold": "node tools/scaffold.mjs",
+    "render": "node tools/render.mjs",
+    "veo": "node tools/vertex-veo.mjs",
+    "veo:budget": "node tools/veo-budget.mjs",
+    "gcp:check": "node tools/check-gcp.mjs"
+  },
+  "dependencies": {
+    "google-auth-library": "^10.6.2"
+  }
+}

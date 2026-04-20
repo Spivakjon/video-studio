@@ -1,0 +1,14 @@
+{
+  "name": "social-short-9x16",
+  "title": "Social Short 9:16",
+  "description": "סרטון אנכי לרילס/טיקטוק/שורטס — 18 שניות, הוק + 2 טיפים + קריאה לפעולה. כותרות גדולות, אנימציות חדות, עיצוב סושיאל.",
+  "brand": "",
+  "aspectRatio": "9:16",
+  "resolution": "1080x1920",
+  "language": "he",
+  "duration": "~18s",
+  "defaultVoice": "Charon",
+  "requiredAssets": [
+    { "path": "assets/hero.gif", "description": "תמונת מוצר (אנכית מועדפת, או ריבועית גדולה)" }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "id": "kikkaboo",
+  "name": "Kikkaboo",
+  "displayName": "Kikkaboo",
+  "description": "חברת מוצרי תינוקות ופעוטות — כיסאות בטיחות, עגלות, ציוד",
+  "sourceDir": "",
+  "defaultTemplate": "kikkaboo-4step",
+  "defaultVoice": "Charon",
+  "language": "he",
+  "colors": {
+    "primary": "#0B1F3A",
+    "accent": "#FF6B35"
+  }
+}

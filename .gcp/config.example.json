@@ -1,0 +1,6 @@
+{
+  "projectId": "your-gcp-project-id",
+  "location": "us-central1",
+  "defaultModel": "veo-3.1-fast-generate-preview",
+  "monthlyBudgetUsd": 50
+}

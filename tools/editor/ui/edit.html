@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>עורך — Video Studio</title>
+  <link rel="stylesheet" href="/ui/styles.css">
+</head>
+<body>
+<div class="app-shell">
+  <header class="topbar">
+    <div style="display:flex;align-items:center;gap:16px">
+      <a href="/" class="topbar-brand">
+        <span class="mark">🎬</span>
+        <span>Video Studio</span>
+      </a>
+      <div class="divider-v"></div>
+      <div>
+        <div style="font-size:12px;color:var(--mute-500)" id="project-brand"></div>
+        <div id="project-name" style="font-family:var(--font-display);font-weight:900;font-size:18px;direction:ltr"></div>
+      </div>
+    </div>
+    <div class="topbar-actions">
+      <button class="btn btn-ghost btn-sm" id="history-btn">🕐 היסטוריה</button>
+      <button class="btn btn-ghost btn-sm" id="save-template-btn">⎘ שמור כתבנית</button>
+      <a href="/" class="btn btn-ghost btn-sm">← חזרה</a>
+    </div>
+  </header>
+
+  <main class="container" style="padding-bottom:120px">
+    <div class="editor-shell">
+      <!-- LEFT: Text fields -->
+      <div class="editor-column">
+        <div id="scenes"></div>
+      </div>
+
+      <!-- RIGHT: Side panel with preview, thumbnails, render, assets -->
+      <div class="side-panel">
+
+        <!-- Preview panel -->
+        <div class="panel">
+          <div class="panel-header">
+            <h3>תצוגה מקדימה</h3>
+            <span id="preview-status" style="font-size:11px;color:var(--mute-600)"></span>
+          </div>
+          <div class="panel-body">
+            <div class="preview-card" id="preview-card">
+              <div class="preview-placeholder" id="preview-placeholder">
+                <div class="icon">🎞</div>
+                <div>לא קיים רינדור עדיין</div>
+                <button class="btn btn-primary btn-sm" id="render-cta">רנדר draft</button>
+              </div>
+            </div>
+            <div class="thumb-strip" id="thumbs"></div>
+          </div>
+        </div>
+
+        <!-- Claude chat panel -->
+        <div class="panel" id="chat-panel">
+          <div class="panel-header">
+            <h3>💬 Claude</h3>
+            <span style="font-size:11px;color:var(--mute-600)">יודע על הסרטון הזה</span>
+          </div>
+          <div class="panel-body" style="padding:0">
+            <div id="chat-messages" style="padding:14px 18px;max-height:360px;overflow-y:auto;display:flex;flex-direction:column;gap:12px;min-height:120px">
+              <div class="chat-hint" style="text-align:center;color:var(--mute-600);font-size:13px;padding:20px 8px">
+                שאל כל דבר על הסרטון —
+                <br>תסריט, סצנות, שינויי טקסט.
+              </div>
+            </div>
+            <div style="padding:10px 12px;border-top:1px solid var(--line);display:flex;gap:8px">
+              <textarea id="chat-input" class="textarea" placeholder="לדוגמה: תשכתב את כותרת סצנה 2 להיות יותר מזמינה" rows="2" style="min-height:44px;padding:10px 12px;font-size:14px;flex:1"></textarea>
+              <button class="btn btn-primary btn-sm" id="chat-send" style="align-self:stretch;min-width:60px" title="Ctrl+Enter">שלח</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Render panel -->
+        <div class="panel">
+          <div class="panel-header"><h3>רינדור</h3></div>
+          <div class="panel-body">
+            <div class="form-field" style="margin-bottom:12px">
+              <div class="label">איכות</div>
+              <div style="display:flex;gap:8px">
+                <button class="btn btn-subtle btn-sm quality-btn active" data-q="draft">Draft</button>
+                <button class="btn btn-subtle btn-sm quality-btn" data-q="high">High</button>
+              </div>
+            </div>
+            <button class="btn btn-primary" id="render-btn" style="width:100%">
+              <span>🎬</span> רנדר עכשיו
+            </button>
+            <div id="render-progress" style="display:none;margin-top:12px">
+              <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--mute-500);margin-bottom:4px">
+                <span id="render-phase">מתחיל…</span>
+                <span id="render-pct">0%</span>
+              </div>
+              <div class="progress-track"><div class="progress-fill" id="render-fill"></div></div>
+            </div>
+            <button class="btn btn-ghost btn-sm" id="download-btn" style="width:100%;margin-top:10px;display:none">
+              ⬇ הורד MP4
+            </button>
+          </div>
+        </div>
+
+        <!-- Voice panel -->
+        <div class="panel">
+          <div class="panel-header"><h3>קול הקריינות</h3></div>
+          <div class="panel-body">
+            <div class="form-field">
+              <select class="select" id="voice-picker" data-dir="ltr"></select>
+              <div class="hint">שינוי הקול מחייב הפקת TTS מחדש לכל הקריינויות</div>
+            </div>
+            <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--mute-500)">
+              <input type="checkbox" id="revoice-all"> הפק מחדש את כל הקריינויות בשמירה הבאה
+            </label>
+          </div>
+        </div>
+
+        <!-- Assets panel -->
+        <div class="panel">
+          <div class="panel-header">
+            <h3>נכסים</h3>
+            <span id="asset-count" style="font-size:11px;color:var(--mute-600)"></span>
+          </div>
+          <div class="panel-body">
+            <div id="asset-list" class="asset-list"></div>
+            <label class="dropzone" id="dropzone" style="margin-top:12px">
+              <div class="icon">📁</div>
+              <div>גרור קבצים לכאן או לחץ לבחור</div>
+              <div style="font-size:11px;margin-top:4px;opacity:0.7">PNG / JPG / GIF / WEBP · עד 50MB</div>
+              <input type="file" id="file-input" accept="image/*" multiple>
+            </label>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- Floating action bar -->
+<div class="action-bar">
+  <span class="status" id="status">טוען…</span>
+  <div class="divider-v"></div>
+  <span style="font-size:11px;color:var(--mute-600)">
+    <span class="kbd">Ctrl</span>+<span class="kbd">S</span> שמור
+  </span>
+  <button class="btn btn-primary btn-sm" id="save-btn" disabled>
+    שמור <span class="dirty-badge" id="dirty-count" style="display:none"></span>
+  </button>
+</div>
+
+<div id="toasts" class="toast-stack"></div>
+
+<!-- Save as Template modal -->
+<div id="tmpl-modal" style="display:none"></div>
+<template id="tmpl-modal-tpl">
+  <div class="modal-backdrop">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>שמור כתבנית</h2>
+        <button class="modal-close" id="tmpl-close">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-field">
+          <div class="label">מזהה התבנית (אנגלית, ללא רווחים)</div>
+          <input class="input" id="tmpl-id" data-dir="ltr" placeholder="e.g. my-custom-4step">
+          <div class="hint">ייווצר תחת <code>templates/&lt;מזהה&gt;</code></div>
+        </div>
+        <div class="form-field">
+          <div class="label">שם תצוגה</div>
+          <input class="input" id="tmpl-title" placeholder="לדוגמה: 4-Step בסגנון שלי">
+        </div>
+        <div class="form-field">
+          <div class="label">תיאור</div>
+          <textarea class="textarea" id="tmpl-desc" placeholder="תיאור קצר של מה שהתבנית מספקת…"></textarea>
+        </div>
+        <div class="form-field">
+          <div class="label">מותג (אופציונלי)</div>
+          <input class="input" id="tmpl-brand" data-dir="ltr">
+        </div>
+        <div class="form-field">
+          <div class="label">אסטרטגיית תוכן</div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <label style="display:flex;gap:10px;padding:12px;background:var(--navy-700);border-radius:var(--r-md);cursor:pointer;border:1px solid var(--line)">
+              <input type="radio" name="tmpl-strategy" value="reset" checked>
+              <div>
+                <div style="font-weight:700;color:var(--white)">איפוס לתבנית ריקה</div>
+                <div style="font-size:12px;color:var(--mute-500)">כל הטקסטים יוחלפו ב-placeholders. הכי נקי להתחלה של פרויקט חדש.</div>
+              </div>
+            </label>
+            <label style="display:flex;gap:10px;padding:12px;background:var(--navy-700);border-radius:var(--r-md);cursor:pointer;border:1px solid var(--line)">
+              <input type="radio" name="tmpl-strategy" value="keep">
+              <div>
+                <div style="font-weight:700;color:var(--white)">שמור תוכן נוכחי</div>
+                <div style="font-size:12px;color:var(--mute-500)">התבנית תשמור את הטקסט הנוכחי של הסרטון. מושלם לגרסאות "עוד כמו זה".</div>
+              </div>
+            </label>
+          </div>
+        </div>
+        <div class="hint" style="padding:10px;background:var(--navy-700);border-radius:var(--r-md);border:1px solid var(--line)">
+          קבצי אודיו (TTS) והרינדורים לא יועתקו לתבנית. פוסטר הסרטון יישמר כתצוגה מקדימה.
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" id="tmpl-cancel">ביטול</button>
+        <button class="btn btn-primary" id="tmpl-create" disabled>שמור תבנית</button>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script>
+const $ = (s, p=document) => p.querySelector(s);
+const $$ = (s, p=document) => [...p.querySelectorAll(s)];
+
+const params = new URLSearchParams(location.search);
+const PROJECT = params.get("project");
+if (!PROJECT) { document.body.innerHTML = '<div style="padding:40px;text-align:center">חסר פרמטר project. <a href="/">חזרה</a></div>'; throw new Error(); }
+
+let manifest = null;
+let scenes = [];
+const originalValues = new Map();
+let selectedQuality = "draft";
+let currentJob = null;
+
+function toast(msg, kind) {
+  const el = document.createElement("div");
+  el.className = "toast" + (kind ? " " + kind : "");
+  el.textContent = msg;
+  $("#toasts").appendChild(el);
+  setTimeout(() => el.remove(), 3500);
+}
+
+function setStatus(text, cls) {
+  const s = $("#status");
+  s.className = "status" + (cls ? " " + cls : "");
+  s.textContent = text;
+}
+
+function countDirty() { return $$(".form-field.dirty").length; }
+function refreshSaveBtn() {
+  const n = countDirty();
+  const revoice = $("#revoice-all").checked;
+  $("#save-btn").disabled = n === 0 && !revoice;
+  $("#dirty-count").style.display = n > 0 ? "inline-block" : "none";
+  $("#dirty-count").textContent = n;
+}
+
+function formatTime(s) { return s.toFixed(1) + "s"; }
+
+function renderField(item) {
+  const wrap = document.createElement("div");
+  wrap.className = "form-field " + item.kind;
+  wrap.dataset.id = item.id;
+
+  const label = document.createElement("div");
+  label.className = "text-field-label " + item.kind;
+  label.textContent = item.label;
+  wrap.appendChild(label);
+
+  const long = item.kind === "voiceover" || (item.value && item.value.length > 60);
+  const el = document.createElement(long ? "textarea" : "input");
+  el.className = long ? "textarea" : "input";
+  if (!long) el.type = "text";
+  el.value = item.value;
+  originalValues.set(item.id, item.value);
+
+  el.addEventListener("input", () => {
+    wrap.classList.toggle("dirty", el.value !== originalValues.get(item.id));
+    refreshSaveBtn();
+  });
+  wrap.appendChild(el);
+
+  if (item.kind === "voiceover") {
+    const audio = document.createElement("audio");
+    audio.controls = true;
+    audio.src = `/api/audio?project=${encodeURIComponent(PROJECT)}&file=${encodeURIComponent(item.audioFile)}&t=${Date.now()}`;
+    audio.style.cssText = "width:100%;margin-top:10px;height:36px";
+    wrap.appendChild(audio);
+    wrap._audio = audio;
+  }
+  return wrap;
+}
+
+function renderScenes() {
+  $("#project-name").textContent = manifest.project;
+  $("#project-brand").textContent = manifest.brand || manifest.language.toUpperCase();
+  document.title = `${manifest.project} — Video Studio`;
+
+  const byScene = new Map();
+  for (const item of manifest.items) {
+    if (!byScene.has(item.scene)) byScene.set(item.scene, []);
+    byScene.get(item.scene).push(item);
+  }
+
+  const scenesEl = $("#scenes");
+  scenesEl.innerHTML = "";
+  for (const [sceneNum, items] of [...byScene.entries()].sort((a, b) => a[0] - b[0])) {
+    const scene = scenes.find(s => s.id === `s${sceneNum}`);
+    const group = document.createElement("div");
+    group.className = "scene-group";
+    group.innerHTML = `
+      <div class="scene-group-header">
+        <span class="badge">${sceneNum}</span>
+        <span class="title">סצנה ${sceneNum}</span>
+        ${scene ? `<span class="duration">${formatTime(scene.start)}→${formatTime(scene.start + scene.duration)} · ${formatTime(scene.duration)}</span>` : ""}
+      </div>
+      <div class="scene-group-body"></div>
+    `;
+    const body = group.querySelector(".scene-group-body");
+    for (const item of items) body.appendChild(renderField(item));
+    scenesEl.appendChild(group);
+  }
+  refreshSaveBtn();
+}
+
+function renderThumbs() {
+  const el = $("#thumbs");
+  const urls = scenes.map(s => `/api/thumbnail?project=${encodeURIComponent(PROJECT)}&scene=${s.id}`);
+  el.innerHTML = scenes.map((s, i) => `
+    <div class="t" data-scene="S${i + 1}">
+      <img src="${urls[i]}" onerror="this.style.display='none'" loading="lazy">
+    </div>
+  `).join("");
+}
+
+function renderPreview(videoList) {
+  const card = $("#preview-card");
+  const placeholder = $("#preview-placeholder");
+  // Use poster + latest render
+  const r = videoList.find(v => v.name === PROJECT);
+  if (r && r.latestRender) {
+    card.innerHTML = `
+      <video controls poster="/api/thumbnail?project=${encodeURIComponent(PROJECT)}&scene=poster" preload="metadata">
+        <source src="/api/render/stream?project=${encodeURIComponent(PROJECT)}" type="video/mp4">
+      </video>
+    `;
+    $("#preview-status").textContent = `${(r.latestRender.size / 1024 / 1024).toFixed(1)}MB`;
+    $("#download-btn").style.display = "block";
+  } else {
+    card.innerHTML = `<div class="preview-placeholder" id="preview-placeholder">
+      <div class="icon">🎞</div>
+      <div>לא קיים רינדור עדיין</div>
+      <button class="btn btn-primary btn-sm" id="render-cta">רנדר draft</button>
+    </div>`;
+    $("#render-cta")?.addEventListener("click", () => startRender("draft"));
+  }
+}
+
+function renderVoicePicker(voices, selected) {
+  const el = $("#voice-picker");
+  el.innerHTML = voices.map(v => `<option value="${v.name}" ${v.name === selected ? "selected" : ""}>${v.label}</option>`).join("");
+  el.addEventListener("change", () => {
+    $("#revoice-all").checked = true;
+    refreshSaveBtn();
+  });
+}
+
+async function renderAssets() {
+  const r = await fetch(`/api/assets?project=${encodeURIComponent(PROJECT)}`);
+  const { assets } = await r.json();
+  $("#asset-count").textContent = `${assets.length} קבצים`;
+  const list = $("#asset-list");
+  if (!assets.length) {
+    list.innerHTML = `<div style="color:var(--mute-600);font-size:13px;text-align:center;padding:12px">אין נכסים עדיין</div>`;
+    return;
+  }
+  list.innerHTML = assets.map(a => `
+    <div class="asset-row">
+      <img src="/api/asset/preview?project=${encodeURIComponent(PROJECT)}&name=${encodeURIComponent(a.name)}&t=${Date.now()}" onerror="this.style.opacity=0.2">
+      <div class="info">
+        <div class="name">${a.name}</div>
+        <div class="size">${(a.size / 1024).toFixed(1)}KB · ${a.mime}</div>
+      </div>
+      <button class="btn btn-ghost btn-sm" data-delete="${a.name}">✕</button>
+    </div>
+  `).join("");
+  list.addEventListener("click", async e => {
+    const btn = e.target.closest("[data-delete]");
+    if (!btn) return;
+    if (!confirm(`למחוק ${btn.dataset.delete}?`)) return;
+    const r = await fetch(`/api/asset?project=${encodeURIComponent(PROJECT)}&name=${encodeURIComponent(btn.dataset.delete)}`, { method: "DELETE" });
+    if (r.ok) renderAssets();
+  });
+}
+
+async function uploadFiles(files) {
+  for (const file of files) {
+    const b64 = await new Promise((res, rej) => {
+      const fr = new FileReader();
+      fr.onload = () => res(fr.result);
+      fr.onerror = rej;
+      fr.readAsDataURL(file);
+    });
+    const r = await fetch(`/api/asset?project=${encodeURIComponent(PROJECT)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: file.name, data: b64 })
+    });
+    if (!r.ok) { toast("העלאה נכשלה: " + file.name, "err"); continue; }
+    toast(`✓ הועלה: ${file.name}`, "ok");
+  }
+  renderAssets();
+}
+
+// --- Save
+async function save() {
+  const dirty = $$(".form-field.dirty");
+  const revoiceAll = $("#revoice-all").checked;
+  if (!dirty.length && !revoiceAll) return;
+  const values = {};
+  for (const f of dirty) values[f.dataset.id] = f.querySelector("input, textarea").value;
+  const voice = $("#voice-picker").value;
+  const voChanges = dirty.filter(f => f.classList.contains("voiceover")).length + (revoiceAll ? manifest.items.filter(i => i.kind === "voiceover").length : 0);
+  setStatus(voChanges ? `שומר ומייצר ${voChanges} קריינויות…` : "שומר…", "busy");
+  $("#save-btn").disabled = true;
+  try {
+    const r = await fetch(`/api/save?project=${encodeURIComponent(PROJECT)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ values, voice, revoiceAll })
+    });
+    const data = await r.json();
+    if (!r.ok || !data.ok) throw new Error(data.error || `HTTP ${r.status}`);
+    for (const [id, v] of Object.entries(values)) originalValues.set(id, v);
+    for (const f of dirty) f.classList.remove("dirty");
+    $("#revoice-all").checked = false;
+    refreshSaveBtn();
+    const failed = (data.regenResults || []).filter(r => r.status === "error");
+    // Refresh audio elements for changed voiceovers
+    for (const id of data.voiceoverChanged || []) {
+      const field = $(`.form-field[data-id="${id}"]`);
+      if (field && field._audio) field._audio.src = field._audio.src.replace(/t=\d+/, "t=" + Date.now());
+    }
+    if (failed.length) setStatus(`נשמר · ${failed.length} קריינויות נכשלו: ${failed[0].error}`, "err");
+    else setStatus(`✓ נשמר — ${data.screenChanged.length} מסך, ${data.voiceoverChanged.length} קריינות`, "ok");
+    toast("✓ נשמר", "ok");
+  } catch (e) {
+    setStatus(`✗ ${e.message}`, "err");
+    $("#save-btn").disabled = false;
+  }
+}
+
+// --- Render
+async function startRender(quality) {
+  if (currentJob) return;
+  selectedQuality = quality || selectedQuality;
+  $("#render-progress").style.display = "block";
+  $("#render-btn").disabled = true;
+  $("#render-phase").textContent = "מתחיל…";
+  $("#render-pct").textContent = "0%";
+  $("#render-fill").style.width = "0%";
+  try {
+    const r = await fetch("/api/render", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ project: PROJECT, quality: selectedQuality })
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || "render failed");
+    currentJob = data.jobId;
+    pollRender();
+  } catch (e) {
+    toast("רינדור נכשל: " + e.message, "err");
+    $("#render-btn").disabled = false;
+    $("#render-progress").style.display = "none";
+  }
+}
+
+async function pollRender() {
+  if (!currentJob) return;
+  try {
+    const r = await fetch(`/api/render/status?jobId=${currentJob}`);
+    if (!r.ok) throw new Error("status lost");
+    const job = await r.json();
+    $("#render-phase").textContent = job.phase || "…";
+    $("#render-pct").textContent = (job.progress || 0) + "%";
+    $("#render-fill").style.width = (job.progress || 0) + "%";
+    if (job.status === "ok") {
+      toast("✓ רינדור הושלם", "ok");
+      currentJob = null;
+      $("#render-btn").disabled = false;
+      // Reload previews
+      const pr = await fetch("/api/projects").then(r => r.json());
+      renderPreview(pr.videos);
+      renderThumbs();
+      setTimeout(() => $("#render-progress").style.display = "none", 2000);
+      return;
+    }
+    if (job.status === "error") {
+      toast("✗ רינדור נכשל: " + (job.error || "unknown"), "err");
+      currentJob = null;
+      $("#render-btn").disabled = false;
+      return;
+    }
+    setTimeout(pollRender, 700);
+  } catch (e) {
+    toast("שגיאת מעקב רינדור: " + e.message, "err");
+    currentJob = null;
+    $("#render-btn").disabled = false;
+  }
+}
+
+// --- Boot
+async function boot() {
+  setStatus("טוען…", "busy");
+  const [texts, scenesData, projects, voices] = await Promise.all([
+    fetch(`/api/texts?project=${encodeURIComponent(PROJECT)}`).then(r => r.json()),
+    fetch(`/api/scenes?project=${encodeURIComponent(PROJECT)}`).then(r => r.json()),
+    fetch("/api/projects").then(r => r.json()),
+    fetch("/api/voices").then(r => r.json())
+  ]);
+  manifest = texts;
+  scenes = scenesData.scenes || [];
+  renderScenes();
+  renderThumbs();
+  renderPreview(projects.videos);
+  renderVoicePicker(voices.voices, manifest.ttsVoice || "Charon");
+  renderAssets();
+  setStatus(`${manifest.items.length} שדות · ${scenes.length} סצנות`, "");
+}
+
+// --- Events
+$("#save-btn").addEventListener("click", save);
+$("#render-btn").addEventListener("click", () => startRender());
+$$(".quality-btn").forEach(b => b.addEventListener("click", () => {
+  $$(".quality-btn").forEach(x => x.classList.remove("active"));
+  b.classList.add("active");
+  selectedQuality = b.dataset.q;
+}));
+$("#revoice-all").addEventListener("change", refreshSaveBtn);
+$("#download-btn").addEventListener("click", () => {
+  window.open(`/api/render/download?project=${encodeURIComponent(PROJECT)}`, "_blank");
+});
+
+// Drag-drop + file input
+const dz = $("#dropzone");
+const fi = $("#file-input");
+fi.addEventListener("change", () => uploadFiles([...fi.files]));
+["dragenter", "dragover"].forEach(ev => dz.addEventListener(ev, e => { e.preventDefault(); dz.classList.add("hover"); }));
+["dragleave", "drop"].forEach(ev => dz.addEventListener(ev, e => { e.preventDefault(); dz.classList.remove("hover"); }));
+dz.addEventListener("drop", e => uploadFiles([...e.dataTransfer.files].filter(f => f.type.startsWith("image/"))));
+
+// Quality button: highlight
+(() => {
+  const first = $$(".quality-btn")[0];
+  if (first) first.classList.add("active");
+})();
+
+// Keyboard
+document.addEventListener("keydown", e => {
+  if ((e.ctrlKey || e.metaKey) && e.key === "s") { e.preventDefault(); if (!$("#save-btn").disabled) save(); }
+});
+
+// === Chat integration ===
+const chatMessages = [];
+function renderChat() {
+  const el = $("#chat-messages");
+  if (!chatMessages.length) {
+    el.innerHTML = `<div class="chat-hint" style="text-align:center;color:var(--mute-600);font-size:13px;padding:20px 8px">שאל כל דבר על הסרטון —<br>תסריט, סצנות, שינויי טקסט.</div>`;
+    return;
+  }
+  el.innerHTML = chatMessages.map(m => {
+    if (m.role === "user") {
+      return `<div style="background:var(--navy-600);padding:10px 14px;border-radius:12px 12px 2px 12px;align-self:flex-end;max-width:90%;font-size:14px;line-height:1.5;white-space:pre-wrap">${escapeHtml(m.content)}</div>`;
+    }
+    if (m.role === "loading") {
+      return `<div style="background:var(--navy-700);padding:10px 14px;border-radius:12px 12px 12px 2px;align-self:flex-start;display:flex;align-items:center;gap:8px;color:var(--mute-500);font-size:13px"><span class="spinner"></span>Claude חושב…</div>`;
+    }
+    return `<div style="background:var(--navy-700);padding:10px 14px;border-radius:12px 12px 12px 2px;align-self:flex-start;max-width:90%;font-size:14px;line-height:1.6;white-space:pre-wrap;border:1px solid var(--line)">${escapeHtml(m.content)}</div>`;
+  }).join("");
+  el.scrollTop = el.scrollHeight;
+}
+function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c])); }
+
+async function sendChat() {
+  const input = $("#chat-input");
+  const msg = input.value.trim();
+  if (!msg) return;
+  chatMessages.push({ role: "user", content: msg });
+  chatMessages.push({ role: "loading" });
+  input.value = "";
+  renderChat();
+  $("#chat-send").disabled = true;
+  try {
+    const res = await fetch("/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ project: PROJECT, message: msg })
+    });
+    // Stream the response text as it arrives
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let text = "";
+    // Replace loading with assistant message
+    chatMessages[chatMessages.length - 1] = { role: "assistant", content: "" };
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      text += decoder.decode(value, { stream: true });
+      chatMessages[chatMessages.length - 1].content = text;
+      renderChat();
+    }
+  } catch (e) {
+    chatMessages[chatMessages.length - 1] = { role: "assistant", content: `שגיאה: ${e.message}` };
+    renderChat();
+  }
+  $("#chat-send").disabled = false;
+  input.focus();
+}
+
+$("#chat-send").addEventListener("click", sendChat);
+$("#chat-input").addEventListener("keydown", e => {
+  if ((e.ctrlKey || e.metaKey) && e.key === "Enter") { e.preventDefault(); sendChat(); }
+});
+
+// Save as Template modal
+function openTemplateModal() {
+  const tpl = $("#tmpl-modal-tpl").content.cloneNode(true);
+  const box = $("#tmpl-modal");
+  box.innerHTML = "";
+  box.appendChild(tpl);
+  box.style.display = "block";
+
+  const $id = $("#tmpl-id");
+  const $title = $("#tmpl-title");
+  const $desc = $("#tmpl-desc");
+  const $brand = $("#tmpl-brand");
+  const $create = $("#tmpl-create");
+  $brand.value = manifest.brand || "";
+  $title.value = `${manifest.project} template`;
+
+  const close = () => { box.innerHTML = ""; box.style.display = "none"; };
+  $("#tmpl-close").addEventListener("click", close);
+  $("#tmpl-cancel").addEventListener("click", close);
+  box.addEventListener("click", e => { if (e.target.classList.contains("modal-backdrop")) close(); });
+
+  $id.addEventListener("input", () => {
+    $create.disabled = !/^[a-z0-9][a-z0-9-_]*$/i.test($id.value);
+  });
+
+  $create.addEventListener("click", async () => {
+    $create.disabled = true;
+    $create.innerHTML = `<span class="spinner"></span> שומר…`;
+    const strategy = document.querySelector('input[name="tmpl-strategy"]:checked').value;
+    try {
+      const r = await fetch("/api/template", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sourceProject: PROJECT,
+          templateId: $id.value.trim(),
+          title: $title.value.trim(),
+          description: $desc.value.trim(),
+          brand: $brand.value.trim(),
+          strategy
+        })
+      });
+      const data = await r.json();
+      if (!r.ok || !data.ok) throw new Error(data.error || "failed");
+      toast(`✓ תבנית "${data.id}" נשמרה`, "ok");
+      close();
+    } catch (e) {
+      toast("✗ " + e.message, "err");
+      $create.disabled = false;
+      $create.textContent = "שמור תבנית";
+    }
+  });
+  $id.focus();
+}
+$("#save-template-btn").addEventListener("click", openTemplateModal);
+
+// History panel
+$("#history-btn").addEventListener("click", async () => {
+  const r = await fetch(`/api/snapshots?project=${encodeURIComponent(PROJECT)}`);
+  const { snapshots } = await r.json();
+  const body = snapshots.length
+    ? snapshots.map(s => {
+        const d = new Date(s.mtime);
+        const nice = d.toLocaleDateString("he-IL") + " " + d.toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+        return `<div style="display:flex;align-items:center;gap:12px;padding:10px 14px;background:var(--navy-700);border-radius:8px">
+          <div style="flex:1;font-size:13px;direction:ltr;color:var(--mute-500)">${s.id}</div>
+          <div style="font-size:12px;color:var(--mute-600)">${nice}</div>
+          <button class="btn btn-primary btn-sm restore-btn" data-id="${s.id}">שחזר</button>
+        </div>`;
+      }).join("")
+    : `<div style="text-align:center;color:var(--mute-600);padding:30px">עדיין אין snapshots. הם נוצרים אוטומטית בשמירה.</div>`;
+
+  // Simple modal
+  const backdrop = document.createElement("div");
+  backdrop.className = "modal-backdrop";
+  backdrop.innerHTML = `
+    <div class="modal">
+      <div class="modal-header">
+        <h2>🕐 היסטוריית שמירות</h2>
+        <button class="modal-close" id="hist-close">✕</button>
+      </div>
+      <div class="modal-body" style="display:flex;flex-direction:column;gap:8px;max-height:60vh;overflow-y:auto">${body}</div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" id="hist-close-2">סגור</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(backdrop);
+  const close = () => backdrop.remove();
+  backdrop.querySelector("#hist-close").addEventListener("click", close);
+  backdrop.querySelector("#hist-close-2").addEventListener("click", close);
+  backdrop.addEventListener("click", e => { if (e.target === backdrop) close(); });
+  backdrop.querySelectorAll(".restore-btn").forEach(b => b.addEventListener("click", async () => {
+    if (!confirm(`לשחזר מ-${b.dataset.id}? המצב הנוכחי יישמר כ-snapshot אוטומטית.`)) return;
+    b.disabled = true; b.innerHTML = `<span class="spinner"></span>`;
+    const r = await fetch(`/api/snapshot/restore?project=${encodeURIComponent(PROJECT)}&id=${encodeURIComponent(b.dataset.id)}`, { method: "POST" });
+    if (r.ok) { toast("✓ שוחזר", "ok"); setTimeout(() => location.reload(), 500); }
+    else { toast("שחזור נכשל", "err"); b.disabled = false; b.textContent = "שחזר"; }
+  }));
+});
+
+boot().catch(e => { setStatus("שגיאה: " + e.message, "err"); toast(e.message, "err"); });
+</script>
+</body>
+</html>

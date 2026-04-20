@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <title>{{PROJECT_NAME}}</title>
+  <style>
+    :root {
+      --navy: #0B1F3A;
+      --navy-lift: #1A3459;
+      --cream: #F4F1EC;
+      --orange: #FF6B35;
+      --green: #00D68F;
+      --mute: #AEC0D9;
+      --white: #FFFFFF;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      width: 100%; height: 100%;
+      background: var(--navy);
+      color: var(--white);
+      font-family: 'Heebo', sans-serif;
+      overflow: hidden;
+    }
+    #stage {
+      position: relative;
+      width: 1080px; height: 1920px;
+      background:
+        radial-gradient(ellipse 900px 900px at 50% -300px, rgba(255,107,53,0.18), transparent 65%),
+        var(--navy);
+      overflow: hidden;
+    }
+
+    .brand-mark {
+      position: absolute;
+      top: 64px; left: 64px;
+      font-family: 'Rubik', sans-serif;
+      font-weight: 900;
+      font-size: 28px;
+      letter-spacing: 0.22em;
+      color: var(--mute);
+      z-index: 5;
+      direction: ltr;
+    }
+
+    .scene { position: absolute; inset: 0; width: 1080px; height: 1920px; overflow: hidden; }
+
+    /* === Scene 1: Hook === */
+    #s1 {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 140px 72px;
+      text-align: center;
+    }
+    #s1 .hook-media {
+      width: 560px; height: 560px;
+      border-radius: 40px;
+      overflow: hidden;
+      background: var(--cream);
+      margin-bottom: 80px;
+      box-shadow: 0 60px 120px rgba(0,0,0,0.4);
+    }
+    #s1 .hook-media img { width: 100%; height: 100%; object-fit: contain; }
+    #s1 .hook-title {
+      font-family: 'Rubik', sans-serif;
+      font-weight: 900;
+      font-size: 120px;
+      line-height: 1.02;
+      color: var(--white);
+      max-width: 920px;
+      letter-spacing: -0.01em;
+    }
+    #s1 .hook-sub {
+      margin-top: 32px;
+      font-weight: 500;
+      font-size: 44px;
+      color: var(--orange);
+    }
+
+    /* === Scene 2/3: Tips (shared layout) === */
+    .tip-layout {
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      justify-content: flex-start;
+      padding: 140px 72px;
+    }
+    .tip-number {
+      align-self: flex-start;
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      margin-bottom: 48px;
+    }
+    .tip-number .dot {
+      width: 24px; height: 24px;
+      border-radius: 50%;
+      background: var(--orange);
+    }
+    .tip-number .label {
+      font-family: 'Rubik', sans-serif;
+      font-weight: 900;
+      font-size: 48px;
+      color: var(--orange);
+      letter-spacing: 0.06em;
+      direction: ltr;
+    }
+    .tip-media {
+      width: 100%;
+      aspect-ratio: 1 / 1;
+      border-radius: 40px;
+      overflow: hidden;
+      background: var(--cream);
+      margin-bottom: 56px;
+      box-shadow: 0 40px 80px rgba(0,0,0,0.35);
+    }
+    .tip-media img { width: 100%; height: 100%; object-fit: cover; }
+    .tip-title {
+      font-family: 'Rubik', sans-serif;
+      font-weight: 900;
+      font-size: 128px;
+      line-height: 1.02;
+      color: var(--white);
+      margin-bottom: 36px;
+      letter-spacing: -0.01em;
+    }
+    .tip-caption {
+      font-weight: 500;
+      font-size: 48px;
+      line-height: 1.3;
+      color: var(--mute);
+    }
+
+    /* === Scene 4: CTA === */
+    #s4 {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 140px 72px;
+      text-align: center;
+      background:
+        radial-gradient(ellipse 1200px 800px at 50% 100%, rgba(255,107,53,0.22), transparent 60%),
+        var(--navy);
+    }
+    #s4 .cta-brand {
+      font-family: 'Rubik', sans-serif;
+      font-weight: 900;
+      font-size: 220px;
+      color: var(--white);
+      letter-spacing: 0.02em;
+      direction: ltr;
+      margin-bottom: 56px;
+    }
+    #s4 .cta-title {
+      font-family: 'Rubik', sans-serif;
+      font-weight: 900;
+      font-size: 88px;
+      line-height: 1.1;
+      color: var(--white);
+      margin-bottom: 80px;
+    }
+    #s4 .cta-button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 36px 96px;
+      background: var(--orange);
+      color: var(--navy);
+      font-family: 'Rubik', sans-serif;
+      font-weight: 900;
+      font-size: 64px;
+      letter-spacing: 0.04em;
+      border-radius: 96px;
+      box-shadow: 0 40px 80px rgba(255,107,53,0.35);
+    }
+
+    /* === Progress bar === */
+    .progress-bar {
+      position: absolute;
+      bottom: 48px;
+      left: 72px; right: 72px;
+      height: 6px;
+      background: rgba(255,255,255,0.15);
+      border-radius: 3px;
+      overflow: hidden;
+      z-index: 4;
+    }
+    .progress-fill {
+      height: 100%;
+      background: var(--orange);
+      transform-origin: left center;
+      transform: scaleX(0);
+    }
+
+    /* === Transitions === */
+    .transition {
+      position: absolute;
+      inset: 0;
+      width: 1080px; height: 1920px;
+      pointer-events: none;
+      z-index: 50;
+    }
+    .transition-cover {
+      position: absolute;
+      top: -10%;
+      width: 100%;
+      height: 120%;
+      background: var(--orange);
+      transform-origin: center;
+    }
+  </style>
+</head>
+<body>
+<div id="stage" data-composition-id="social-short" data-start="0" data-duration="18" data-width="1080" data-height="1920">
+
+  <span class="brand-mark" id="brand-mark">{{BRAND_UPPER}}</span>
+
+  <!-- Progress bar runs across the whole video -->
+  <div class="progress-bar clip" data-start="0" data-duration="18" data-track-index="3">
+    <div class="progress-fill" id="progress-fill"></div>
+  </div>
+
+  <!-- AUDIO -->
+  <audio id="a1" class="clip" data-start="0.15" data-duration="2.5" data-track-index="10" src="audio/01-hook.wav"></audio>
+  <audio id="a2" class="clip" data-start="3.2" data-duration="4.5" data-track-index="10" src="audio/02-tip1.wav"></audio>
+  <audio id="a3" class="clip" data-start="8.2" data-duration="4.5" data-track-index="10" src="audio/03-tip2.wav"></audio>
+  <audio id="a4" class="clip" data-start="13.3" data-duration="4.5" data-track-index="10" src="audio/04-cta.wav"></audio>
+
+  <!-- SCENE 1: HOOK -->
+  <div id="s1" class="scene clip" data-start="0" data-duration="3" data-track-index="1">
+    <div class="hook-media">
+      <img src="assets/hero.gif" alt="" id="s1-img">
+    </div>
+    <div class="hook-title" id="s1-hook">[שאלה שתופסת — למשל: טעות נפוצה שמסכנת?]</div>
+    <div class="hook-sub" id="s1-sub">[הבטחה — לדוגמה: 2 דקות וזה מאחוריך]</div>
+  </div>
+
+  <!-- SCENE 2: TIP 1 -->
+  <div id="s2" class="scene tip-layout clip" data-start="3" data-duration="5" data-track-index="1">
+    <div class="tip-number">
+      <span class="dot"></span>
+      <span class="label">STEP <span id="s2-num">01</span></span>
+    </div>
+    <div class="tip-media"><img src="assets/hero.gif" alt=""></div>
+    <div class="tip-title" id="s2-title">[טיפ 1 — כותרת]</div>
+    <div class="tip-caption" id="s2-caption">[מה לעשות בפועל]</div>
+  </div>
+
+  <!-- SCENE 3: TIP 2 -->
+  <div id="s3" class="scene tip-layout clip" data-start="8" data-duration="5" data-track-index="1">
+    <div class="tip-number">
+      <span class="dot"></span>
+      <span class="label">STEP <span id="s3-num">02</span></span>
+    </div>
+    <div class="tip-media"><img src="assets/hero.gif" alt=""></div>
+    <div class="tip-title" id="s3-title">[טיפ 2 — כותרת]</div>
+    <div class="tip-caption" id="s3-caption">[מה לעשות בפועל]</div>
+  </div>
+
+  <!-- SCENE 4: CTA -->
+  <div id="s4" class="scene clip" data-start="13" data-duration="5" data-track-index="1">
+    <div class="cta-brand" id="s4-brand">{{BRAND_UPPER}}</div>
+    <div class="cta-title" id="s4-title">[פעולה — לדוגמה: קבלו מדריך מלא]</div>
+    <div class="cta-button" id="s4-cta">לחץ כאן</div>
+  </div>
+
+  <!-- TRANSITIONS -->
+  <div id="t1" class="transition clip" data-start="2.75" data-duration="0.5" data-track-index="2">
+    <div class="transition-cover" id="t1-cover"></div>
+  </div>
+  <div id="t2" class="transition clip" data-start="7.75" data-duration="0.5" data-track-index="2">
+    <div class="transition-cover" id="t2-cover"></div>
+  </div>
+  <div id="t3" class="transition clip" data-start="12.75" data-duration="0.5" data-track-index="2">
+    <div class="transition-cover" id="t3-cover"></div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+  <script>
+    window.__timelines = window.__timelines || {};
+    const tl = gsap.timeline({ paused: true });
+
+    /* Progress bar — fills over 18 seconds */
+    tl.fromTo("#progress-fill",
+      { scaleX: 0 },
+      { scaleX: 1, duration: 18, ease: "none" }, 0);
+
+    /* SCENE 1: Hook */
+    tl.from("#s1 .hook-media", { scale: 0.8, opacity: 0, duration: 0.6, ease: "back.out(1.6)", transformOrigin: "center" }, 0.1);
+    tl.from("#s1 .hook-title", { y: 80, opacity: 0, duration: 0.5, ease: "expo.out" }, 0.4);
+    tl.from("#s1 .hook-sub", { y: 40, opacity: 0, duration: 0.4, ease: "power2.out" }, 0.7);
+
+    /* Transition 1 */
+    tl.fromTo("#t1-cover",
+      { scaleY: 0 },
+      { scaleY: 1, duration: 0.25, ease: "power3.in", transformOrigin: "top center" }, 2.75);
+    tl.fromTo("#t1-cover",
+      { scaleY: 1 },
+      { scaleY: 0, duration: 0.25, ease: "power3.out", transformOrigin: "bottom center" }, 3.0);
+
+    /* SCENE 2: Tip 1 */
+    tl.from("#s2 .tip-number", { x: -60, opacity: 0, duration: 0.4, ease: "power3.out" }, 3.1);
+    tl.from("#s2 .tip-media", { scale: 0.9, opacity: 0, duration: 0.5, ease: "back.out(1.4)", transformOrigin: "center" }, 3.2);
+    tl.from("#s2 .tip-title", { y: 40, opacity: 0, duration: 0.5, ease: "expo.out" }, 3.5);
+    tl.from("#s2 .tip-caption", { y: 30, opacity: 0, duration: 0.4, ease: "power2.out" }, 3.7);
+
+    /* Transition 2 */
+    tl.fromTo("#t2-cover",
+      { scaleY: 0 },
+      { scaleY: 1, duration: 0.25, ease: "power3.in", transformOrigin: "top center" }, 7.75);
+    tl.fromTo("#t2-cover",
+      { scaleY: 1 },
+      { scaleY: 0, duration: 0.25, ease: "power3.out", transformOrigin: "bottom center" }, 8.0);
+
+    /* SCENE 3: Tip 2 */
+    tl.from("#s3 .tip-number", { x: -60, opacity: 0, duration: 0.4, ease: "power3.out" }, 8.1);
+    tl.from("#s3 .tip-media", { scale: 0.9, opacity: 0, duration: 0.5, ease: "back.out(1.4)", transformOrigin: "center" }, 8.2);
+    tl.from("#s3 .tip-title", { y: 40, opacity: 0, duration: 0.5, ease: "expo.out" }, 8.5);
+    tl.from("#s3 .tip-caption", { y: 30, opacity: 0, duration: 0.4, ease: "power2.out" }, 8.7);
+
+    /* Transition 3 */
+    tl.fromTo("#t3-cover",
+      { scaleY: 0 },
+      { scaleY: 1, duration: 0.25, ease: "power3.in", transformOrigin: "top center" }, 12.75);
+    tl.fromTo("#t3-cover",
+      { scaleY: 1 },
+      { scaleY: 0, duration: 0.25, ease: "power3.out", transformOrigin: "bottom center" }, 13.0);
+
+    /* SCENE 4: CTA */
+    tl.from("#s4-brand", { scale: 0.8, opacity: 0, duration: 0.6, ease: "back.out(1.6)", transformOrigin: "center" }, 13.1);
+    tl.from("#s4-title", { y: 50, opacity: 0, duration: 0.5, ease: "expo.out" }, 13.5);
+    tl.from("#s4-cta", { scale: 0, opacity: 0, duration: 0.6, ease: "back.out(2)", transformOrigin: "center" }, 13.9);
+    // Button bounce
+    tl.to("#s4-cta", { scale: 1.06, duration: 0.4, ease: "sine.inOut", yoyo: true, repeat: 1 }, 14.6);
+    // Final fade (last scene only)
+    tl.to("#s4 > *", { opacity: 0, y: -20, duration: 0.4, ease: "power2.in", stagger: 0.05 }, 17.4);
+
+    window.__timelines["social-short"] = tl;
+  </script>
+</div>
+</body>
+</html>

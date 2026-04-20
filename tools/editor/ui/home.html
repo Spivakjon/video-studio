@@ -1,0 +1,767 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Video Studio</title>
+  <link rel="stylesheet" href="/ui/styles.css">
+  <style>
+    /* Business project cards */
+    .bp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: var(--s-4); }
+    .bp-card {
+      background: var(--navy-800);
+      border: 1px solid var(--line);
+      border-radius: var(--r-lg);
+      padding: 20px 22px;
+      display: flex;
+      gap: 16px;
+      align-items: center;
+      cursor: pointer;
+      transition: border-color var(--dur-med), transform var(--dur-med);
+      position: relative;
+    }
+    .bp-card:hover { border-color: var(--orange-500); transform: translateY(-2px); }
+    .bp-logo {
+      width: 56px; height: 56px;
+      border-radius: var(--r-md);
+      background: var(--cream);
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+      overflow: hidden;
+    }
+    .bp-logo img { width: 80%; height: 80%; object-fit: contain; }
+    .bp-logo.placeholder { background: var(--navy-600); color: var(--mute-500); font-size: 24px; }
+    .bp-info { flex: 1; min-width: 0; }
+    .bp-info .name { font-family: var(--font-display); font-weight: 900; font-size: 18px; color: #fff; }
+    .bp-info .path { font-size: 11px; color: var(--mute-600); direction: ltr; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 2px; }
+    .bp-info .count { font-size: 11px; color: var(--orange-500); margin-top: 4px; font-weight: 700; }
+    .bp-actions { display: flex; gap: 4px; opacity: 0; transition: opacity var(--dur-fast); }
+    .bp-card:hover .bp-actions { opacity: 1; }
+    .bp-actions button { padding: 4px 8px; font-size: 12px; }
+    .bp-add {
+      background: transparent;
+      border: 2px dashed var(--line-strong);
+      display: flex; align-items: center; justify-content: center;
+      gap: 8px;
+      color: var(--mute-500);
+      font-weight: 600;
+      cursor: pointer;
+      min-height: 96px;
+    }
+    .bp-add:hover { border-color: var(--orange-500); color: var(--orange-500); background: var(--orange-100); }
+
+    /* Nicer video group label */
+    .bp-group-label { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: var(--mute-500); text-transform: uppercase; letter-spacing: 0.1em; }
+    .bp-group-label .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--orange-500); }
+
+    /* Budget strip */
+    .budget-strip {
+      display: flex;
+      align-items: center;
+      gap: 24px;
+      padding: 18px 24px;
+      background: var(--navy-800);
+      border: 1px solid var(--line);
+      border-radius: var(--r-lg);
+      margin-bottom: 24px;
+      cursor: pointer;
+      transition: border-color var(--dur-fast);
+    }
+    .budget-strip:hover { border-color: var(--orange-500); }
+    .budget-strip .icon { font-size: 28px; flex-shrink: 0; }
+    .budget-strip .info { flex: 1; min-width: 0; }
+    .budget-strip .title { font-size: 13px; color: var(--mute-500); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 4px; }
+    .budget-strip .numbers { font-family: var(--font-display); font-weight: 900; font-size: 22px; color: var(--white); direction: ltr; }
+    .budget-strip .numbers .spent { color: var(--orange-500); }
+    .budget-strip .numbers .cap { color: var(--mute-600); font-weight: 500; }
+    .budget-strip .bar-wrap { width: 300px; flex-shrink: 0; }
+    .budget-strip .bar-track { width: 100%; height: 8px; background: var(--navy-700); border-radius: var(--r-pill); overflow: hidden; }
+    .budget-strip .bar-fill { height: 100%; background: linear-gradient(90deg, var(--green-500), var(--orange-500)); transition: width 0.4s ease; }
+    .budget-strip .bar-fill.high { background: var(--red-500); }
+    .budget-strip .bar-label { font-size: 12px; color: var(--mute-600); margin-top: 4px; text-align: center; direction: ltr; }
+    .budget-strip .stats { font-size: 12px; color: var(--mute-600); direction: ltr; }
+    .budget-strip .stats strong { color: var(--mute-500); }
+  </style>
+</head>
+<body>
+<div class="app-shell">
+  <header class="topbar">
+    <a href="/" class="topbar-brand">
+      <span class="mark">🎬</span>
+      <span>Video Studio</span>
+    </a>
+    <div class="topbar-actions">
+      <button class="btn btn-primary btn-lg" id="new-video-btn">
+        <span>＋</span> סרטון חדש
+      </button>
+    </div>
+  </header>
+
+  <main class="container">
+    <!-- Veo budget strip — MTD spend -->
+    <div id="budget-strip"></div>
+    <div id="hero"></div>
+
+    <section style="margin-top:32px;margin-bottom:48px">
+      <h2 class="section-title">
+        <span>פרויקטים עסקיים</span>
+        <span id="bp-count" style="flex:0;font-size:12px;color:var(--mute-600);margin-inline-start:auto;text-transform:none;letter-spacing:0"></span>
+      </h2>
+      <div id="business-projects" class="bp-grid"></div>
+    </section>
+
+    <section id="videos-section" style="margin-bottom:56px">
+      <h2 class="section-title">
+        <span>סרטונים</span>
+        <span id="videos-count" style="flex:0;font-size:12px;color:var(--mute-600);margin-inline-start:auto;text-transform:none;letter-spacing:0"></span>
+      </h2>
+      <div id="videos"></div>
+    </section>
+
+    <section style="margin-bottom:32px">
+      <h2 class="section-title">
+        <span>תבניות</span>
+        <span id="templates-count" style="flex:0;font-size:12px;color:var(--mute-600);margin-inline-start:auto;text-transform:none;letter-spacing:0"></span>
+      </h2>
+      <div id="templates" class="template-grid"></div>
+    </section>
+  </main>
+</div>
+
+<div id="toasts" class="toast-stack"></div>
+
+<!-- ========== Modals ========== -->
+<div id="modal-slot" style="display:none"></div>
+
+<template id="new-video-modal-tpl">
+  <div class="modal-backdrop">
+    <div class="modal" style="max-width:640px">
+      <div class="modal-header">
+        <h2>סרטון חדש</h2>
+        <button class="modal-close modal-dismiss">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-field">
+          <div class="label">בסיס מידע — לאיזה פרויקט הסרטון שייך?</div>
+          <div id="nv-bp-search" style="margin-bottom:8px;display:none">
+            <input class="input" id="nv-bp-filter" placeholder="חפש פרויקט…" data-dir="rtl">
+          </div>
+          <div id="nv-bp-list" style="max-height:280px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;padding:4px;background:var(--navy-900);border:1px solid var(--line);border-radius:var(--r-md)"></div>
+          <div class="hint">פרויקטים רשומים, תיקיות שהתגלו ב-<code>כללי פרויקטים</code>, או ללא פרויקט.</div>
+        </div>
+        <div class="form-field">
+          <div class="label">תבנית</div>
+          <div id="nv-tmpl" class="template-grid" style="grid-template-columns:1fr;gap:10px"></div>
+        </div>
+        <div class="form-field">
+          <div class="label">שם הסרטון</div>
+          <input class="input" id="nv-name" data-dir="ltr" placeholder="e.g. stroller-x1-intro" autocomplete="off">
+          <div class="hint">אנגלית בלבד, ללא רווחים. למשל: <code>ivan-v2</code>, <code>stroller-launch</code></div>
+        </div>
+        <div class="form-field" id="nv-brand-field" style="display:none">
+          <div class="label">מותג (ללא פרויקט עסקי)</div>
+          <input class="input" id="nv-brand" data-dir="ltr" placeholder="e.g. kikkaboo">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost modal-dismiss">ביטול</button>
+        <button class="btn btn-primary" id="nv-create" disabled>צור ופתח לעריכה</button>
+      </div>
+    </div>
+  </div>
+</template>
+
+<style>
+  .bp-pick {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border-radius: var(--r-md);
+    background: var(--navy-800);
+    border: 1px solid var(--line);
+    cursor: pointer;
+    transition: border-color var(--dur-fast), background var(--dur-fast);
+  }
+  .bp-pick:hover { border-color: var(--orange-300); }
+  .bp-pick.active { border-color: var(--orange-500); background: var(--orange-100); }
+  .bp-pick .bp-pick-logo {
+    width: 36px; height: 36px;
+    border-radius: var(--r-sm);
+    background: var(--cream);
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden;
+    flex-shrink: 0;
+    font-weight: 900;
+    color: var(--navy-800);
+  }
+  .bp-pick .bp-pick-logo img { width: 80%; height: 80%; object-fit: contain; }
+  .bp-pick .bp-pick-logo.empty { background: var(--navy-600); color: var(--mute-500); font-weight: 500; }
+  .bp-pick .bp-pick-info { flex: 1; min-width: 0; }
+  .bp-pick .bp-pick-info .name { font-weight: 700; font-size: 14px; color: #fff; }
+  .bp-pick .bp-pick-info .sub { font-size: 11px; color: var(--mute-600); direction: ltr; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+  .bp-pick .tag-kind {
+    font-size: 10px; padding: 2px 8px; border-radius: var(--r-pill); font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
+  }
+  .bp-pick .tag-registered { background: var(--green-100); color: var(--green-500); }
+  .bp-pick .tag-discovered { background: var(--navy-600); color: var(--mute-500); }
+  .bp-pick .tag-none { background: var(--orange-100); color: var(--orange-500); }
+</style>
+
+<template id="bp-modal-tpl">
+  <div class="modal-backdrop">
+    <div class="modal" style="max-width:620px">
+      <div class="modal-header">
+        <h2 id="bp-modal-title">פרויקט עסקי חדש</h2>
+        <button class="modal-close modal-dismiss">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-field">
+          <div class="label">מזהה (אנגלית, ללא רווחים)</div>
+          <input class="input" id="bp-id" data-dir="ltr" placeholder="e.g. kikkaboo, dubai-mamad">
+        </div>
+        <div class="form-field">
+          <div class="label">שם תצוגה</div>
+          <input class="input" id="bp-name" placeholder="לדוגמה: Kikkaboo / ממ״דים לדובאי">
+        </div>
+        <div class="form-field">
+          <div class="label">תיאור קצר</div>
+          <textarea class="textarea" id="bp-desc" placeholder="מה החברה/הפרויקט עושה"></textarea>
+        </div>
+        <div class="form-field">
+          <div class="label">תיקיית מקור (אופציונלי)</div>
+          <input class="input" id="bp-srcdir" data-dir="ltr" placeholder="C:\Users\spiva\OneDrive\Desktop\כללי פרויקטים\...">
+          <div class="hint">תיקייה בהיד-דיסק שמכילה מידע על הפרויקט (קטלוג, תמונות, מסמכים). Claude יוכל לסרוק אותה כשיוצר סרטון.</div>
+        </div>
+        <div class="form-field">
+          <div class="label">לוגו (PNG עם שקיפות מומלץ)</div>
+          <div style="display:flex;gap:12px;align-items:center">
+            <div id="bp-logo-preview" style="width:72px;height:72px;background:var(--cream);border-radius:var(--r-md);display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0;font-size:24px;color:var(--mute-700)">📎</div>
+            <label class="btn btn-ghost btn-sm" style="cursor:pointer">
+              בחר קובץ
+              <input type="file" id="bp-logo-input" accept="image/png,image/svg+xml" style="display:none">
+            </label>
+          </div>
+        </div>
+        <div class="form-field">
+          <div class="label">קול ברירת מחדל לקריינות</div>
+          <select class="select" id="bp-voice" data-dir="ltr"></select>
+        </div>
+        <div class="form-field">
+          <div class="label">הקשר לתוצרים (Markdown)</div>
+          <textarea class="textarea" id="bp-context" placeholder="דברים ש-Claude צריך לדעת על הפרויקט כשהוא מייצר סרטון" style="min-height:140px"></textarea>
+          <div class="hint">מוצרים, טון, קהל יעד, צבעים, כל מה שחשוב. נטען אוטומטית ב-Claude Code.</div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost modal-dismiss">ביטול</button>
+        <button class="btn btn-danger" id="bp-delete" style="margin-inline-end:auto;display:none">מחק פרויקט</button>
+        <button class="btn btn-primary" id="bp-save">שמור</button>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script>
+const $ = (s, p=document) => p.querySelector(s);
+const $$ = (s, p=document) => [...p.querySelectorAll(s)];
+
+function toast(msg, kind) {
+  const el = document.createElement("div");
+  el.className = "toast" + (kind ? " " + kind : "");
+  el.textContent = msg;
+  $("#toasts").appendChild(el);
+  setTimeout(() => el.remove(), 3500);
+}
+function formatDuration(s) { if (!s) return ""; const m=Math.floor(s/60),sec=Math.round(s%60); return m>0?`${m}:${String(sec).padStart(2,"0")}`:`${sec}s`; }
+function formatDate(ms) { if (!ms) return ""; const d=Math.floor((Date.now()-ms)/86400000); if(d===0)return "היום"; if(d===1)return "אתמול"; if(d<7)return `לפני ${d} ימים`; return new Date(ms).toLocaleDateString("he-IL"); }
+
+// === Modal helper
+function openModal(templateId, setup) {
+  const tpl = $(`#${templateId}`).content.cloneNode(true);
+  const slot = $("#modal-slot");
+  slot.innerHTML = "";
+  slot.appendChild(tpl);
+  slot.style.display = "block";
+  const close = () => { slot.innerHTML = ""; slot.style.display = "none"; };
+  $$(".modal-dismiss", slot).forEach(b => b.addEventListener("click", close));
+  slot.addEventListener("click", e => { if (e.target.classList.contains("modal-backdrop")) close(); });
+  setup({ close });
+}
+
+// === State
+let TEMPLATES = [], VIDEOS = [], BPS = [], VOICES = [];
+
+async function loadAll() {
+  const [pr, tr, br, vr, bd] = await Promise.all([
+    fetch("/api/projects").then(r => r.json()),
+    fetch("/api/templates").then(r => r.json()),
+    fetch("/api/business-projects").then(r => r.json()),
+    fetch("/api/voices").then(r => r.json()),
+    fetch("/api/veo/budget").then(r => r.json())
+  ]);
+  VIDEOS = pr.videos; TEMPLATES = tr.templates; BPS = br.projects; VOICES = vr.voices;
+  renderBudget(bd);
+  renderHero(); renderBusinessProjects(); renderVideos(); renderTemplates();
+}
+
+function renderBudget(b) {
+  const el = document.getElementById("budget-strip");
+  const high = b.percentUsed >= 80;
+  el.innerHTML = `
+    <div class="budget-strip" id="budget-card" title="לחץ לפרטי הוצאות">
+      <div class="icon">💳</div>
+      <div class="info">
+        <div class="title">Veo Spend · ${b.monthKey}</div>
+        <div class="numbers"><span class="spent">$${b.spentUsd.toFixed(2)}</span> <span class="cap">/ $${b.capUsd}</span></div>
+      </div>
+      <div class="bar-wrap">
+        <div class="bar-track"><div class="bar-fill ${high ? "high" : ""}" style="width:${Math.min(100, b.percentUsed)}%"></div></div>
+        <div class="bar-label">${b.percentUsed}% used · $${b.remainingUsd.toFixed(2)} left</div>
+      </div>
+      <div class="stats">
+        <div><strong>${b.callCount}</strong> call${b.callCount !== 1 ? "s" : ""} this month</div>
+        <div>All time: <strong>$${b.allTimeSpentUsd.toFixed(2)}</strong> · ${b.allTimeCallCount} calls</div>
+      </div>
+    </div>
+  `;
+  document.getElementById("budget-card").addEventListener("click", () => openBudgetModal(b));
+}
+
+async function openBudgetModal(budget) {
+  // Re-fetch to get fresh entries
+  const b = await fetch("/api/veo/budget").then(r => r.json());
+  const backdrop = document.createElement("div");
+  backdrop.className = "modal-backdrop";
+  const rows = b.entries.length
+    ? b.entries.map(e => {
+        const d = new Date(e.at);
+        const ts = d.toLocaleString("he-IL", { dateStyle: "short", timeStyle: "short" });
+        return `<tr>
+          <td style="padding:8px 12px;color:var(--mute-500);direction:ltr;font-size:12px">${ts}</td>
+          <td style="padding:8px 12px;color:var(--white);font-size:13px">${e.project || "—"}</td>
+          <td style="padding:8px 12px;color:var(--mute-500);font-size:11px;direction:ltr">${(e.model || "").replace("-generate", "").replace("-preview", "")}</td>
+          <td style="padding:8px 12px;color:var(--mute-500);font-size:12px;direction:ltr">${e.duration || "?"}s</td>
+          <td style="padding:8px 12px;color:var(--orange-500);font-weight:700;direction:ltr">$${(e.estCostUsd || 0).toFixed(2)}</td>
+        </tr>
+        <tr>
+          <td colspan="5" style="padding:0 12px 8px;color:var(--mute-600);font-size:11px;border-bottom:1px solid var(--line)">"${(e.prompt || "").slice(0, 100)}${(e.prompt || "").length > 100 ? "…" : ""}"</td>
+        </tr>`;
+      }).join("")
+    : `<tr><td colspan="5" style="padding:40px;text-align:center;color:var(--mute-600)">עדיין אין קריאות ל-Veo החודש</td></tr>`;
+  backdrop.innerHTML = `
+    <div class="modal" style="max-width:800px">
+      <div class="modal-header">
+        <h2>💳 פירוט Veo spend — ${b.monthKey}</h2>
+        <button class="modal-close" id="bud-close">✕</button>
+      </div>
+      <div class="modal-body">
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:24px">
+          <div style="padding:16px;background:var(--navy-700);border-radius:10px">
+            <div style="font-size:11px;color:var(--mute-500);text-transform:uppercase;letter-spacing:0.1em">תקציב חודשי</div>
+            <div style="font-family:var(--font-display);font-weight:900;font-size:26px;color:#fff;direction:ltr">$${b.capUsd}</div>
+          </div>
+          <div style="padding:16px;background:var(--navy-700);border-radius:10px">
+            <div style="font-size:11px;color:var(--mute-500);text-transform:uppercase;letter-spacing:0.1em">הוצאה החודש</div>
+            <div style="font-family:var(--font-display);font-weight:900;font-size:26px;color:var(--orange-500);direction:ltr">$${b.spentUsd.toFixed(2)}</div>
+          </div>
+          <div style="padding:16px;background:var(--navy-700);border-radius:10px">
+            <div style="font-size:11px;color:var(--mute-500);text-transform:uppercase;letter-spacing:0.1em">נותר</div>
+            <div style="font-family:var(--font-display);font-weight:900;font-size:26px;color:var(--green-500);direction:ltr">$${b.remainingUsd.toFixed(2)}</div>
+          </div>
+        </div>
+        <table style="width:100%;border-collapse:collapse">
+          <thead><tr>
+            <th style="padding:8px 12px;text-align:right;color:var(--mute-500);font-size:11px;text-transform:uppercase;letter-spacing:0.1em;border-bottom:1px solid var(--line)">זמן</th>
+            <th style="padding:8px 12px;text-align:right;color:var(--mute-500);font-size:11px;text-transform:uppercase;letter-spacing:0.1em;border-bottom:1px solid var(--line)">סרטון</th>
+            <th style="padding:8px 12px;text-align:right;color:var(--mute-500);font-size:11px;text-transform:uppercase;letter-spacing:0.1em;border-bottom:1px solid var(--line)">מודל</th>
+            <th style="padding:8px 12px;text-align:right;color:var(--mute-500);font-size:11px;text-transform:uppercase;letter-spacing:0.1em;border-bottom:1px solid var(--line)">משך</th>
+            <th style="padding:8px 12px;text-align:right;color:var(--mute-500);font-size:11px;text-transform:uppercase;letter-spacing:0.1em;border-bottom:1px solid var(--line)">עלות</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+        <div class="hint" style="margin-top:20px;padding:14px;background:var(--navy-700);border-radius:8px;border:1px solid var(--line);line-height:1.6">
+          הטבלה כוללת רק קריאות שעברו דרך <code>npm run veo</code>. למספר המלא מה-Google Cloud — היכנסו ל-<a href="https://console.cloud.google.com/billing/01629F-8F25D5-3C0AF7/reports" target="_blank" style="color:var(--orange-500)">GCP Billing Reports</a> (מתעדכן תוך 24-48 שעות).
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" id="bud-close-2">סגור</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(backdrop);
+  const close = () => backdrop.remove();
+  backdrop.querySelector("#bud-close").addEventListener("click", close);
+  backdrop.querySelector("#bud-close-2").addEventListener("click", close);
+  backdrop.addEventListener("click", e => { if (e.target === backdrop) close(); });
+}
+
+function renderHero() {
+  const hero = $("#hero");
+  if (!VIDEOS.length && !BPS.length) {
+    hero.innerHTML = `
+      <div class="card" style="padding:56px 48px;text-align:center;background:linear-gradient(135deg,var(--navy-700),var(--navy-800));border:1px solid var(--line-strong)">
+        <div style="font-size:72px;margin-bottom:16px">🎬</div>
+        <h2 style="font-family:var(--font-display);font-weight:900;font-size:36px;margin:0 0 12px">ברוך הבא ל-Video Studio</h2>
+        <p style="color:var(--mute-500);font-size:16px;margin:0 0 28px;max-width:560px;margin-inline:auto;line-height:1.6">
+          התחל על ידי יצירת פרויקט עסקי (קיקבו, דובאי, אחר) ואז צור סרטונים תחתיו.
+        </p>
+        <button class="btn btn-primary btn-lg" onclick="openBPModal()" style="font-size:16px;padding:16px 32px">
+          <span>＋</span> צור פרויקט עסקי
+        </button>
+      </div>
+    `;
+  } else { hero.innerHTML = ""; }
+}
+
+function renderBusinessProjects() {
+  const el = $("#business-projects");
+  $("#bp-count").textContent = BPS.length ? `${BPS.length}` : "";
+  const addCard = `<div class="bp-card bp-add" onclick="openBPModal()">
+    <span style="font-size:20px">＋</span> הוסף פרויקט עסקי
+  </div>`;
+  if (!BPS.length) { el.innerHTML = addCard; return; }
+  el.innerHTML = BPS.map(p => {
+    const logo = p.hasLogo
+      ? `<img src="/api/business-project/logo?id=${encodeURIComponent(p.id)}" alt="">`
+      : `<span>${(p.displayName || p.id).charAt(0).toUpperCase()}</span>`;
+    return `
+    <div class="bp-card" data-id="${p.id}" onclick="openBPModal('${p.id}')">
+      <div class="bp-logo ${p.hasLogo ? "" : "placeholder"}">${logo}</div>
+      <div class="bp-info">
+        <div class="name">${p.displayName || p.name}</div>
+        <div class="path">${p.sourceDir || "ללא תיקיית מקור"}</div>
+        <div class="count">${p.videoCount || 0} סרטונים</div>
+      </div>
+    </div>
+  `;}).join("") + addCard;
+}
+
+function renderVideos() {
+  const el = $("#videos");
+  const section = $("#videos-section");
+  $("#videos-count").textContent = VIDEOS.length ? `${VIDEOS.length} סה״כ` : "";
+  if (!VIDEOS.length) { section.style.display = "none"; return; }
+  section.style.display = "block";
+
+  // Group by business project
+  const groups = new Map();
+  for (const v of VIDEOS) {
+    const key = v.businessProject || v.brand || "_";
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(v);
+  }
+
+  el.innerHTML = [...groups.entries()].map(([key, vs]) => {
+    const bp = BPS.find(p => p.id === key);
+    const label = bp ? (bp.displayName || bp.name) : (key === "_" ? "ללא פרויקט" : key);
+    return `
+    <div style="margin-bottom:28px">
+      <div class="bp-group-label" style="margin-bottom:12px"><span class="dot"></span>${label}</div>
+      <div class="video-grid">
+        ${vs.map(v => {
+          const poster = v.hasPoster ? `<img src="/api/thumbnail?project=${encodeURIComponent(v.name)}&scene=poster" alt="" loading="lazy">` : `<div class="placeholder-icon">🎬</div>`;
+          const status = v.latestRender ? `<span class="status-pill status-rendered">✓ רונדר ${formatDate(v.latestRender.mtime)}</span>` : `<span class="status-pill status-draft">טיוטה</span>`;
+          return `
+          <a class="card video-card" href="/edit?project=${encodeURIComponent(v.name)}">
+            <div class="thumb">
+              ${poster}
+              ${v.duration ? `<span class="duration">${formatDuration(v.duration)}</span>` : ""}
+            </div>
+            <div class="body">
+              <div class="name">${v.name}</div>
+              <div class="meta">${status}</div>
+            </div>
+          </a>
+        `;}).join("")}
+      </div>
+    </div>
+  `;}).join("");
+}
+
+function renderTemplates() {
+  const el = $("#templates");
+  $("#templates-count").textContent = TEMPLATES.length ? `${TEMPLATES.length}` : "";
+  el.innerHTML = TEMPLATES.map(t => {
+    const poster = t.hasPoster ? `<img src="/api/template/thumbnail?id=${encodeURIComponent(t.id)}" loading="lazy" style="width:100%;aspect-ratio:16/9;object-fit:cover;border-radius:var(--r-md);margin-bottom:12px">` : `<div style="aspect-ratio:16/9;background:var(--navy-700);border-radius:var(--r-md);margin-bottom:12px;display:flex;align-items:center;justify-content:center;font-size:32px;opacity:0.4">📐</div>`;
+    return `
+    <div class="card template-card">
+      ${poster}
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
+        <div style="flex:1;min-width:0">
+          <div class="name">${t.name}</div>
+          <div class="desc">${t.description || ""}</div>
+        </div>
+        ${t.isSystem ? "" : `<button class="btn btn-ghost btn-sm delete-tmpl-btn" data-id="${t.id}" title="מחק תבנית">✕</button>`}
+      </div>
+      <div class="tags">
+        ${t.brand ? `<span class="tag">${t.brand}</span>` : ""}
+        <span class="tag">${t.aspectRatio}</span>
+        ${t.duration ? `<span class="tag">${t.duration}</span>` : ""}
+      </div>
+    </div>
+    `;
+  }).join("");
+}
+
+// === Template delete (delegated)
+document.addEventListener("click", async e => {
+  const btn = e.target.closest(".delete-tmpl-btn");
+  if (!btn) return;
+  e.preventDefault(); e.stopPropagation();
+  if (!confirm(`למחוק את התבנית "${btn.dataset.id}"?`)) return;
+  const r = await fetch(`/api/template?id=${encodeURIComponent(btn.dataset.id)}`, { method: "DELETE" });
+  if (r.ok) { toast("✓ נמחק", "ok"); loadAll(); }
+});
+
+// === New Video modal
+async function openNewVideoModal() {
+  // Load discovered folders alongside registered projects
+  let discovered = [];
+  try {
+    const dr = await fetch("/api/discover-projects").then(r => r.json());
+    discovered = (dr.found || []).filter(f => !f.isRegistered);
+  } catch {}
+
+  openModal("new-video-modal-tpl", ({ close }) => {
+    const $list = $("#nv-bp-list"), $filter = $("#nv-bp-filter"),
+          $tmpl = $("#nv-tmpl"), $name = $("#nv-name"),
+          $brand = $("#nv-brand"), $brandField = $("#nv-brand-field"),
+          $create = $("#nv-create");
+
+    // Build selection items: registered projects + discovered folders + "no project"
+    const items = [
+      ...BPS.map(p => ({
+        kind: "registered",
+        id: p.id,
+        name: p.displayName || p.name,
+        sub: p.sourceDir || p.description || "",
+        hasLogo: p.hasLogo,
+        videoCount: p.videoCount,
+        defaultTemplate: p.defaultTemplate
+      })),
+      ...discovered.map(f => ({
+        kind: "discovered",
+        id: null,
+        suggestedId: f.suggestedId,
+        folderName: f.folderName,
+        path: f.path,
+        name: f.folderName,
+        sub: f.path
+      })),
+      { kind: "none", id: null, name: "ללא פרויקט עסקי", sub: "סרטון עצמאי — אני אזין ידנית מותג ותמונות" }
+    ];
+
+    let selected = items[0];
+
+    function drawList(filterText = "") {
+      const t = filterText.trim().toLowerCase();
+      const filtered = t ? items.filter(i =>
+        (i.name || "").toLowerCase().includes(t) ||
+        (i.sub || "").toLowerCase().includes(t)
+      ) : items;
+      $list.innerHTML = filtered.map((it, idx) => {
+        const active = it === selected ? "active" : "";
+        let logo;
+        if (it.kind === "registered" && it.hasLogo) {
+          logo = `<img src="/api/business-project/logo?id=${encodeURIComponent(it.id)}" alt="">`;
+        } else if (it.kind === "registered") {
+          logo = `<span>${(it.name || "?").charAt(0).toUpperCase()}</span>`;
+        } else if (it.kind === "discovered") {
+          logo = `📁`;
+        } else {
+          logo = `✖`;
+        }
+        const badge = it.kind === "registered" ? `<span class="tag-kind tag-registered">רשום · ${it.videoCount || 0} סרטונים</span>`
+                    : it.kind === "discovered" ? `<span class="tag-kind tag-discovered">מתיקייה</span>`
+                    : `<span class="tag-kind tag-none">ללא</span>`;
+        return `
+          <div class="bp-pick ${active}" data-idx="${filtered.indexOf(it)}" data-kind="${it.kind}" data-id="${it.id || ""}">
+            <div class="bp-pick-logo ${(it.kind !== 'registered' || !it.hasLogo) ? 'empty' : ''}">${logo}</div>
+            <div class="bp-pick-info">
+              <div class="name">${it.name}</div>
+              ${it.sub ? `<div class="sub">${it.sub}</div>` : ""}
+            </div>
+            ${badge}
+          </div>
+        `;
+      }).join("");
+      $list._filtered = filtered;
+    }
+
+    function applySelection() {
+      [...$list.querySelectorAll(".bp-pick")].forEach(el => el.classList.toggle("active", parseInt(el.dataset.idx) === ($list._filtered || items).indexOf(selected)));
+      $brandField.style.display = selected.kind === "none" ? "block" : "none";
+      // Re-draw template picker with the selected project's default template highlighted
+      const defaultTemplate = selected.kind === "registered" ? selected.defaultTemplate : (TEMPLATES[0]?.id);
+      drawTemplates(defaultTemplate);
+    }
+
+    $list.addEventListener("click", e => {
+      const row = e.target.closest(".bp-pick");
+      if (!row) return;
+      const list = $list._filtered || items;
+      const idx = parseInt(row.dataset.idx);
+      if (!isNaN(idx) && list[idx]) {
+        selected = list[idx];
+        applySelection();
+      }
+    });
+    $filter.addEventListener("input", () => drawList($filter.value));
+
+    if (items.length > 8) $("#nv-bp-search").style.display = "block";
+    drawList();
+
+    const drawTemplates = (selectedId) => {
+      $tmpl.innerHTML = TEMPLATES.map((t, i) => `
+        <label class="card template-card" style="cursor:pointer;border-color:${(selectedId ? t.id === selectedId : i === 0) ? 'var(--orange-500)' : 'var(--line)'}" data-template="${t.id}">
+          <input type="radio" name="template" value="${t.id}" ${(selectedId ? t.id === selectedId : i === 0) ? "checked" : ""} style="display:none">
+          <div class="name">${t.name}</div>
+          <div class="desc">${t.description}</div>
+          <div class="tags">
+            ${t.brand ? `<span class="tag">${t.brand}</span>` : ""}
+            <span class="tag">${t.aspectRatio}</span>
+            ${t.duration ? `<span class="tag">${t.duration}</span>` : ""}
+          </div>
+        </label>
+      `).join("");
+    };
+    applySelection();
+
+    $tmpl.addEventListener("click", e => {
+      const label = e.target.closest("[data-template]");
+      if (!label) return;
+      $$(".template-card", $tmpl).forEach(c => c.style.borderColor = "var(--line)");
+      label.style.borderColor = "var(--orange-500)";
+      label.querySelector("input").checked = true;
+    });
+    $name.addEventListener("input", () => {
+      $create.disabled = !/^[a-z0-9][a-z0-9-_]*$/i.test($name.value);
+    });
+
+    $create.addEventListener("click", async () => {
+      $create.disabled = true;
+      $create.innerHTML = `<span class="spinner"></span> יוצר…`;
+      try {
+        const template = $tmpl.querySelector("input[name=template]:checked").value;
+        const name = $name.value.trim();
+        let businessProject = null;
+        let brand = "";
+
+        if (selected.kind === "registered") {
+          businessProject = selected.id;
+        } else if (selected.kind === "discovered") {
+          // First register the discovered folder as a business project
+          const rr = await fetch("/api/business-project/register-discovered", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ path: selected.path, folderName: selected.folderName, id: selected.suggestedId })
+          });
+          const rdata = await rr.json();
+          if (!rr.ok || !rdata.ok) throw new Error(rdata.error || "register failed");
+          businessProject = rdata.id;
+          toast(`✓ פרויקט עסקי "${selected.folderName}" נוצר`, "ok");
+        } else {
+          brand = $brand.value.trim();
+        }
+
+        const r = await fetch("/api/project", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name, template, businessProject, brand })
+        });
+        const data = await r.json();
+        if (!r.ok || !data.ok) throw new Error(data.error || "failed");
+        toast(`✓ ${name} נוצר`, "ok");
+        location.href = `/edit?project=${encodeURIComponent(name)}`;
+      } catch (e) {
+        toast(`✗ ${e.message}`, "err");
+        $create.disabled = false; $create.textContent = "צור ופתח לעריכה";
+      }
+    });
+    $name.focus();
+  });
+}
+
+// === Business Project modal
+async function openBPModal(id) {
+  let existing = null;
+  if (id) {
+    existing = await fetch(`/api/business-project?id=${encodeURIComponent(id)}`).then(r => r.json());
+  }
+  openModal("bp-modal-tpl", ({ close }) => {
+    const $id = $("#bp-id"), $name = $("#bp-name"), $desc = $("#bp-desc"),
+          $src = $("#bp-srcdir"), $voice = $("#bp-voice"), $ctx = $("#bp-context"),
+          $logo = $("#bp-logo-input"), $preview = $("#bp-logo-preview"),
+          $save = $("#bp-save"), $del = $("#bp-delete"), $title = $("#bp-modal-title");
+
+    $voice.innerHTML = VOICES.map(v => `<option value="${v.name}">${v.label}</option>`).join("");
+
+    if (existing) {
+      $title.textContent = existing.displayName || existing.name;
+      $id.value = existing.id; $id.disabled = true;
+      $name.value = existing.displayName || existing.name || "";
+      $desc.value = existing.description || "";
+      $src.value = existing.sourceDir || "";
+      $voice.value = existing.defaultVoice || "Charon";
+      $ctx.value = existing.context || "";
+      if (existing.hasLogo) $preview.innerHTML = `<img src="/api/business-project/logo?id=${encodeURIComponent(existing.id)}&t=${Date.now()}" style="width:80%;height:80%;object-fit:contain">`;
+      $del.style.display = "inline-flex";
+    }
+
+    let logoData = null;
+    $logo.addEventListener("change", () => {
+      const f = $logo.files[0];
+      if (!f) return;
+      const fr = new FileReader();
+      fr.onload = () => {
+        logoData = fr.result;
+        $preview.innerHTML = `<img src="${logoData}" style="width:80%;height:80%;object-fit:contain">`;
+      };
+      fr.readAsDataURL(f);
+    });
+
+    $save.addEventListener("click", async () => {
+      const idVal = $id.value.trim();
+      if (!/^[a-z0-9][a-z0-9-_]*$/i.test(idVal)) { toast("מזהה לא תקין (אנגלית בלבד)", "err"); return; }
+      $save.disabled = true;
+      try {
+        const r = await fetch("/api/business-project", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id: idVal,
+            name: $name.value.trim(),
+            displayName: $name.value.trim(),
+            description: $desc.value.trim(),
+            sourceDir: $src.value.trim(),
+            defaultVoice: $voice.value,
+            context: $ctx.value,
+            logoData
+          })
+        });
+        const data = await r.json();
+        if (!r.ok || !data.ok) throw new Error(data.error || "failed");
+        toast("✓ נשמר", "ok");
+        close(); loadAll();
+      } catch (e) { toast("✗ " + e.message, "err"); $save.disabled = false; }
+    });
+
+    $del.addEventListener("click", async () => {
+      if (!confirm(`למחוק את הפרויקט "${$name.value}"? הסרטונים יישמרו אבל לא יהיו משויכים.`)) return;
+      const r = await fetch(`/api/business-project?id=${encodeURIComponent($id.value)}`, { method: "DELETE" });
+      if (r.ok) { toast("✓ נמחק", "ok"); close(); loadAll(); }
+    });
+
+    if (existing) $name.focus(); else $id.focus();
+  });
+}
+
+window.openBPModal = openBPModal;
+window.openNewVideoModal = openNewVideoModal;
+$("#new-video-btn").addEventListener("click", openNewVideoModal);
+
+loadAll().catch(e => toast("שגיאה בטעינה: " + e.message, "err"));
+</script>
+</body>
+</html>
