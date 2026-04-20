@@ -31,7 +31,7 @@ const BUSINESS_PROJECTS_DIR = resolve(STUDIO_ROOT, "projects");
 const UI_DIR = resolve(__dirname, "ui");
 const SCAN_ROOT = process.env.STUDIO_SCAN_ROOT ||
   "C:\\Users\\spiva\\OneDrive\\Desktop\\כללי פרויקטים";
-const PORT = Number(process.env.STUDIO_PORT || 3003);
+const PORT = Number(process.env.PORT || process.env.STUDIO_PORT || 3003);
 const TTS_MODEL = "gemini-3.1-flash-tts-preview";
 
 // Curated voice list (Gemini TTS prebuilt voices we've tested).

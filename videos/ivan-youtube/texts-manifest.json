@@ -1,0 +1,169 @@
+{
+  "project": "ivan-youtube",
+  "brand": "kikkaboo",
+  "businessProject": "kikkaboo",
+  "language": "he",
+  "ttsVoice": "Kore",
+  "items": [
+    {
+      "id": "s1-word",
+      "scene": 1,
+      "kind": "screen",
+      "label": "סצנה 1 — שם מוצר",
+      "elementId": "s1-word",
+      "value": "I-VAN"
+    },
+    {
+      "id": "s1-sub",
+      "scene": 1,
+      "kind": "screen",
+      "label": "סצנה 1 — כותרת משנה",
+      "elementId": "s1-sub",
+      "value": "התקנה נכונה בארבעה שלבים"
+    },
+    {
+      "id": "vo-01",
+      "scene": 1,
+      "kind": "voiceover",
+      "label": "סצנה 1 — קריינות",
+      "audioFile": "01-intro.wav",
+      "value": "איי-ואן מקיקבו. התקנה נכונה בארבעה שלבים פשוטים."
+    },
+    {
+      "id": "s2-title",
+      "scene": 2,
+      "kind": "screen",
+      "label": "סצנה 2 — כותרת",
+      "elementId": "s2-title",
+      "value": "חברו את ה-ISOFIX"
+    },
+    {
+      "id": "s2-caption",
+      "scene": 2,
+      "kind": "screen",
+      "label": "סצנה 2 — תיאור",
+      "elementId": "s2-caption",
+      "value": "לעוגן הרכב עד לקליק"
+    },
+    {
+      "id": "s2-click",
+      "scene": 2,
+      "kind": "screen",
+      "label": "סצנה 2 — תג CLICK",
+      "elementId": "s2-click",
+      "value": "CLICK"
+    },
+    {
+      "id": "vo-02",
+      "scene": 2,
+      "kind": "voiceover",
+      "label": "סצנה 2 — קריינות",
+      "audioFile": "02-isofix.wav",
+      "value": "שלב ראשון. חברו את זרועות האייזופיקס לעוגן הרכב עד לקליק ברור."
+    },
+    {
+      "id": "s3-title",
+      "scene": 3,
+      "kind": "screen",
+      "label": "סצנה 3 — כותרת",
+      "elementId": "s3-title",
+      "value": "דחפו לחוזקה"
+    },
+    {
+      "id": "s3-caption",
+      "scene": 3,
+      "kind": "screen",
+      "label": "סצנה 3 — תיאור",
+      "elementId": "s3-caption",
+      "value": "דחפו את הכיסא בחוזקה אל תוך מושב הרכב"
+    },
+    {
+      "id": "vo-03",
+      "scene": 3,
+      "kind": "voiceover",
+      "label": "סצנה 3 — קריינות",
+      "audioFile": "03-push.wav",
+      "value": "שלב שני. דחפו את הכיסא בחוזקה אל תוך מושב הרכב."
+    },
+    {
+      "id": "s4-title",
+      "scene": 4,
+      "kind": "screen",
+      "label": "סצנה 4 — כותרת",
+      "elementId": "s4-title",
+      "value": "Top Tether"
+    },
+    {
+      "id": "s4-caption",
+      "scene": 4,
+      "kind": "screen",
+      "label": "סצנה 4 — תיאור",
+      "elementId": "s4-caption",
+      "value": "חברו את הרצועה העליונה לעוגן שברכב ומתחו"
+    },
+    {
+      "id": "vo-04",
+      "scene": 4,
+      "kind": "voiceover",
+      "label": "סצנה 4 — קריינות",
+      "audioFile": "04-tether.wav",
+      "value": "שלב שלישי. חברו את רצועת הטופ-טתר לעוגן העליון, ומתחו עד שהאינדיקטור ירוק."
+    },
+    {
+      "id": "s5-title",
+      "scene": 5,
+      "kind": "screen",
+      "label": "סצנה 5 — כותרת",
+      "elementId": "s5-title",
+      "value": "שלושה ירוקים"
+    },
+    {
+      "id": "s5-caption",
+      "scene": 5,
+      "kind": "screen",
+      "label": "סצנה 5 — תיאור",
+      "elementId": "s5-caption",
+      "value": "ודאו שכל שלושת האינדיקטורים — ISOFIX ימין, ISOFIX שמאל ו-Top Tether — דולקים בירוק"
+    },
+    {
+      "id": "vo-05",
+      "scene": 5,
+      "kind": "voiceover",
+      "label": "סצנה 5 — קריינות",
+      "audioFile": "05-verify.wav",
+      "value": "שלב רביעי. ודאו ששלושת האינדיקטורים הירוקים דולקים."
+    },
+    {
+      "id": "s6-brand",
+      "scene": 6,
+      "kind": "screen",
+      "label": "סצנה 6 — שם מותג",
+      "elementId": "s6-brand",
+      "value": "Kikkaboo"
+    },
+    {
+      "id": "s6-tag",
+      "scene": 6,
+      "kind": "screen",
+      "label": "סצנה 6 — סלוגן",
+      "elementId": "s6-tag",
+      "value": "נסיעה בטוחה"
+    },
+    {
+      "id": "s6-product",
+      "scene": 6,
+      "kind": "screen",
+      "label": "סצנה 6 — שם תחתון",
+      "elementId": "s6-product",
+      "value": "I-VAN · Safe Seat"
+    },
+    {
+      "id": "vo-06",
+      "scene": 6,
+      "kind": "voiceover",
+      "label": "סצנה 6 — קריינות",
+      "audioFile": "06-outro.wav",
+      "value": "איי-ואן מקיקבו. נסיעה בטוחה."
+    }
+  ]
+}
