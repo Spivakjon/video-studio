@@ -1,0 +1,11 @@
+{
+  "id": "mevaser-zion",
+  "name": "mevaser-zion",
+  "displayName": "מבשר ציון",
+  "description": "פרויקט מבשר ציון",
+  "sourceDir": "C:\\Users\\spiva\\OneDrive\\Desktop\\כללי פרויקטים\\mevaser-zion",
+  "defaultTemplate": "kikkaboo-4step",
+  "defaultVoice": "Kore",
+  "language": "he",
+  "colors": {}
+}

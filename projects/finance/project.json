@@ -1,0 +1,11 @@
+{
+  "id": "finance",
+  "name": "finance",
+  "displayName": "Finance",
+  "description": "פרויקט Finance",
+  "sourceDir": "C:\\Users\\spiva\\OneDrive\\Desktop\\כללי פרויקטים\\Projects\\finance",
+  "defaultTemplate": "kikkaboo-4step",
+  "defaultVoice": "Kore",
+  "language": "he",
+  "colors": {}
+}

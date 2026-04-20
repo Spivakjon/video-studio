@@ -1,0 +1,11 @@
+{
+  "id": "uploads",
+  "name": "uploads",
+  "displayName": "Uploads",
+  "description": "פרויקט Uploads",
+  "sourceDir": "C:\\Users\\spiva\\OneDrive\\Desktop\\כללי פרויקטים\\Projects\\uploads",
+  "defaultTemplate": "kikkaboo-4step",
+  "defaultVoice": "Kore",
+  "language": "he",
+  "colors": {}
+}

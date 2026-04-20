@@ -21,9 +21,30 @@ import { resolve, dirname, basename, extname, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFileSync, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
+import { estimateDraft, generateDraft, checkBudget as checkAiBudget } from "../claude-api.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const STUDIO_ROOT = resolve(__dirname, "..", "..");
+
+// Tiny .env loader — no dependency on dotenv. Runs before env is read.
+(function loadDotEnv() {
+  const envPath = resolve(STUDIO_ROOT, ".env");
+  if (!existsSync(envPath)) return;
+  try {
+    for (const raw of readFileSync(envPath, "utf8").split("\n")) {
+      const line = raw.trim();
+      if (!line || line.startsWith("#")) continue;
+      const eq = line.indexOf("=");
+      if (eq < 0) continue;
+      const k = line.slice(0, eq).trim();
+      let v = line.slice(eq + 1).trim();
+      if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) {
+        v = v.slice(1, -1);
+      }
+      if (!(k in process.env)) process.env[k] = v;
+    }
+  } catch (e) { console.warn("  .env load failed:", e.message); }
+})();
 // When a persistent volume is mounted (e.g. Railway mounts /app/data), read/write
 // user data there so it survives deploys. Code-owned dirs stay in the image.
 const DATA_ROOT = process.env.STUDIO_DATA_ROOT || STUDIO_ROOT;
@@ -862,6 +883,121 @@ const server = createServer(async (req, res) => {
       if (!id) return send404(res);
       const p = resolve(businessProjectDir(id), "branding", "logo.png");
       return sendFile(res, p, "image/png");
+    }
+
+    // --- API: AI (Claude) — autonomous video generation
+    //
+    // Flow:
+    //   1. POST /api/ai/estimate    → returns cost estimate (no API call)
+    //   2. User sees cost + approves in UI
+    //   3. POST /api/ai/generate-video { ...body, approved: true }
+    //       → calls Claude, scaffolds project, applies draft, returns video name
+    //
+    // Budget cap lives in .ai/config.json. Every call is logged to
+    // .ai/usage-log.jsonl and must pass the per-call approval flag.
+
+    if (req.method === "GET" && path === "/api/ai/budget") {
+      return sendJson(res, 200, { ...checkAiBudget(), hasKey: Boolean(process.env.ANTHROPIC_API_KEY) });
+    }
+    if (req.method === "POST" && path === "/api/ai/estimate") {
+      const body = JSON.parse((await readBody(req)).toString("utf8"));
+      const bp = loadBusinessProject(body.businessProjectId);
+      if (!bp) return sendJson(res, 400, { error: "business project not found" });
+      const ctxPath = resolve(businessProjectDir(body.businessProjectId), "context.md");
+      const contextMd = existsSync(ctxPath) ? readFileSync(ctxPath, "utf8") : "";
+      const tplDir = resolve(TEMPLATES_DIR, safeName(body.template || bp.defaultTemplate || "kikkaboo-4step"));
+      const tplManifestPath = resolve(tplDir, "texts-manifest.json");
+      if (!existsSync(tplManifestPath)) return sendJson(res, 400, { error: "template manifest missing" });
+      const template = JSON.parse(readFileSync(tplManifestPath, "utf8"));
+      const est = estimateDraft({ projectMeta: bp, contextMd, template, userPrompt: body.prompt || "" });
+      const budget = checkAiBudget();
+      return sendJson(res, 200, { ...est, budget });
+    }
+    if (req.method === "POST" && path === "/api/ai/generate-video") {
+      if (!process.env.ANTHROPIC_API_KEY) {
+        return sendJson(res, 400, { error: "ANTHROPIC_API_KEY not set on server" });
+      }
+      const body = JSON.parse((await readBody(req)).toString("utf8"));
+      if (!body.approved) return sendJson(res, 400, { error: "missing approval flag" });
+      if (!body.businessProjectId) return sendJson(res, 400, { error: "businessProjectId required" });
+      if (!body.videoName) return sendJson(res, 400, { error: "videoName required" });
+      const bp = loadBusinessProject(body.businessProjectId);
+      if (!bp) return sendJson(res, 400, { error: "business project not found" });
+      const ctxPath = resolve(businessProjectDir(body.businessProjectId), "context.md");
+      const contextMd = existsSync(ctxPath) ? readFileSync(ctxPath, "utf8") : "";
+      const tplId = body.template || bp.defaultTemplate || "kikkaboo-4step";
+      const tplManifestPath = resolve(TEMPLATES_DIR, safeName(tplId), "texts-manifest.json");
+      if (!existsSync(tplManifestPath)) return sendJson(res, 400, { error: "template manifest missing" });
+      const template = JSON.parse(readFileSync(tplManifestPath, "utf8"));
+
+      let result;
+      try {
+        result = await generateDraft({
+          projectMeta: bp,
+          contextMd,
+          template,
+          userPrompt: body.prompt || ""
+        });
+      } catch (e) {
+        return sendJson(res, 500, { error: String(e.message || e) });
+      }
+
+      // Scaffold the new video project using the existing scaffolder.
+      let scaffolded;
+      try {
+        scaffolded = scaffoldProject({
+          from: tplId,
+          to: body.videoName,
+          brand: bp.id,
+          businessProject: bp.id
+        });
+      } catch (e) {
+        return sendJson(res, 500, { error: `scaffold failed: ${e.message}`, draft: result.draft });
+      }
+
+      // Apply Claude's item values on top of the scaffold.
+      const manifest = loadManifest(scaffolded.name);
+      const byId = new Map(manifest.items.map(it => [it.id, it]));
+      const applied = [];
+      for (const d of result.draft.items || []) {
+        const item = byId.get(d.id);
+        if (!item || typeof d.value !== "string") continue;
+        item.value = d.value;
+        applied.push(d.id);
+      }
+      if (result.draft.ttsVoice && typeof result.draft.ttsVoice === "string") {
+        manifest.ttsVoice = result.draft.ttsVoice;
+      }
+      manifest.aiDraft = {
+        at: new Date().toISOString(),
+        model: result.model,
+        prompt: body.prompt || "",
+        notes: result.draft.notes || "",
+        estCostUsd: result.estCostUsd
+      };
+      saveManifest(scaffolded.name, manifest);
+
+      // Also apply screen text into index.html so editor preview is accurate.
+      try {
+        const htmlPath = resolve(scaffolded.dir, "index.html");
+        let html = readFileSync(htmlPath, "utf8");
+        for (const item of manifest.items) {
+          if (item.kind !== "screen" || !item.elementId) continue;
+          try { html = replaceScreenText(html, item.elementId, item.value); } catch {}
+        }
+        writeFileSync(htmlPath, html, "utf8");
+      } catch (e) { console.warn("html apply failed:", e.message); }
+
+      return sendJson(res, 200, {
+        ok: true,
+        videoName: scaffolded.name,
+        itemsApplied: applied.length,
+        totalItems: manifest.items.length,
+        estCostUsd: result.estCostUsd,
+        model: result.model,
+        notes: result.draft.notes || "",
+        usage: result.usage
+      });
     }
 
     // --- API: project CRUD

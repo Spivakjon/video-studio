@@ -1,0 +1,11 @@
+{
+  "id": "wolfson",
+  "name": "wolfson",
+  "displayName": "וולפסון",
+  "description": "פרויקט וולפסון",
+  "sourceDir": "C:\\Users\\spiva\\OneDrive\\Desktop\\כללי פרויקטים\\wolfson",
+  "defaultTemplate": "kikkaboo-4step",
+  "defaultVoice": "Kore",
+  "language": "he",
+  "colors": {}
+}

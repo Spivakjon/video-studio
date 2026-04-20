@@ -1,0 +1,11 @@
+{
+  "id": "wishbox",
+  "name": "wishbox",
+  "displayName": "Wishbox",
+  "description": "פרויקט Wishbox",
+  "sourceDir": "C:\\Users\\spiva\\OneDrive\\Desktop\\כללי פרויקטים\\Projects\\wishbox",
+  "defaultTemplate": "kikkaboo-4step",
+  "defaultVoice": "Kore",
+  "language": "he",
+  "colors": {}
+}

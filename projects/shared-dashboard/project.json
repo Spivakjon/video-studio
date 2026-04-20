@@ -1,0 +1,11 @@
+{
+  "id": "shared-dashboard",
+  "name": "shared-dashboard",
+  "displayName": "Shared Dashboard (infra)",
+  "description": "פרויקט Shared Dashboard (infra)",
+  "sourceDir": "C:\\Users\\spiva\\OneDrive\\Desktop\\כללי פרויקטים\\Projects\\shared-dashboard",
+  "defaultTemplate": "kikkaboo-4step",
+  "defaultVoice": "Kore",
+  "language": "he",
+  "colors": {}
+}

@@ -1,0 +1,11 @@
+{
+  "id": "mond-muni",
+  "name": "Mond-Muni",
+  "displayName": "מועצה תל-מונד (tel-mond.co.il)",
+  "description": "פרויקט מועצה תל-מונד (tel-mond.co.il)",
+  "sourceDir": "C:\\Users\\spiva\\OneDrive\\Desktop\\כללי פרויקטים\\Projects\\Mond-Muni",
+  "defaultTemplate": "kikkaboo-4step",
+  "defaultVoice": "Kore",
+  "language": "he",
+  "colors": {}
+}

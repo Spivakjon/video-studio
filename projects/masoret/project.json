@@ -1,0 +1,11 @@
+{
+  "id": "masoret",
+  "name": "masoret",
+  "displayName": "מסורת",
+  "description": "פרויקט מסורת",
+  "sourceDir": "C:\\Users\\spiva\\OneDrive\\Desktop\\כללי פרויקטים\\masoret",
+  "defaultTemplate": "kikkaboo-4step",
+  "defaultVoice": "Kore",
+  "language": "he",
+  "colors": {}
+}

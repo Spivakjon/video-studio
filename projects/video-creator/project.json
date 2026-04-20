@@ -1,0 +1,11 @@
+{
+  "id": "video-creator",
+  "name": "video-creator",
+  "displayName": "Video Creator (infra)",
+  "description": "פרויקט Video Creator (infra)",
+  "sourceDir": "C:\\Users\\spiva\\OneDrive\\Desktop\\כללי פרויקטים\\Projects\\video-creator",
+  "defaultTemplate": "kikkaboo-4step",
+  "defaultVoice": "Kore",
+  "language": "he",
+  "colors": {}
+}

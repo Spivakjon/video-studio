@@ -1,0 +1,11 @@
+{
+  "id": "risco-shelter",
+  "name": "risco-shelter",
+  "displayName": "Risco Shelter",
+  "description": "פרויקט Risco Shelter",
+  "sourceDir": "C:\\Users\\spiva\\OneDrive\\Desktop\\כללי פרויקטים\\Projects\\risco-shelter",
+  "defaultTemplate": "kikkaboo-4step",
+  "defaultVoice": "Kore",
+  "language": "he",
+  "colors": {}
+}

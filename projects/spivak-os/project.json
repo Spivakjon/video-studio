@@ -1,0 +1,11 @@
+{
+  "id": "spivak-os",
+  "name": "spivak-os",
+  "displayName": "Spivak OS",
+  "description": "פרויקט Spivak OS",
+  "sourceDir": "C:\\Users\\spiva\\OneDrive\\Desktop\\כללי פרויקטים\\Projects\\spivak-os",
+  "defaultTemplate": "kikkaboo-4step",
+  "defaultVoice": "Kore",
+  "language": "he",
+  "colors": {}
+}

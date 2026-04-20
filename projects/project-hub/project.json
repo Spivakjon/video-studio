@@ -1,0 +1,11 @@
+{
+  "id": "project-hub",
+  "name": "project-hub",
+  "displayName": "Project Hub",
+  "description": "פרויקט Project Hub",
+  "sourceDir": "C:\\Users\\spiva\\OneDrive\\Desktop\\כללי פרויקטים\\project-hub",
+  "defaultTemplate": "kikkaboo-4step",
+  "defaultVoice": "Kore",
+  "language": "he",
+  "colors": {}
+}

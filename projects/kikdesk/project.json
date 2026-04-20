@@ -1,0 +1,11 @@
+{
+  "id": "kikdesk",
+  "name": "Kikdesk",
+  "displayName": "Kikdesk",
+  "description": "פרויקט Kikdesk",
+  "sourceDir": "C:\\Users\\spiva\\OneDrive\\Desktop\\כללי פרויקטים\\Projects\\Kikdesk",
+  "defaultTemplate": "kikkaboo-4step",
+  "defaultVoice": "Kore",
+  "language": "he",
+  "colors": {}
+}

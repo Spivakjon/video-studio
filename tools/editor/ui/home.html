@@ -90,7 +90,10 @@
       <span class="mark">🎬</span>
       <span>Video Studio</span>
     </a>
-    <div class="topbar-actions">
+    <div class="topbar-actions" style="display:flex;gap:8px">
+      <button class="btn btn-ghost btn-lg" id="ai-gen-btn" title="תכתוב מה אתה רוצה — Claude יכין טיוטה לפי הפרויקט">
+        <span>✨</span> צור מפרומפט
+      </button>
       <button class="btn btn-primary btn-lg" id="new-video-btn">
         <span>＋</span> סרטון חדש
       </button>
@@ -207,6 +210,45 @@
   .bp-pick .tag-discovered { background: var(--navy-600); color: var(--mute-500); }
   .bp-pick .tag-none { background: var(--orange-100); color: var(--orange-500); }
 </style>
+
+<template id="ai-gen-modal-tpl">
+  <div class="modal-backdrop">
+    <div class="modal" style="max-width:680px">
+      <div class="modal-header">
+        <h2>✨ צור סרטון מפרומפט</h2>
+        <button class="modal-close modal-dismiss">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-field">
+          <div class="label">בסיס מידע — איזה פרויקט?</div>
+          <select class="select" id="ai-bp" data-dir="rtl"></select>
+          <div class="hint">Claude יקרא את <code>context.md</code> ותיקיית המקור של הפרויקט.</div>
+        </div>
+        <div class="form-field">
+          <div class="label">תבנית</div>
+          <select class="select" id="ai-tmpl" data-dir="ltr"></select>
+        </div>
+        <div class="form-field">
+          <div class="label">שם הסרטון החדש</div>
+          <input class="input" id="ai-name" data-dir="ltr" placeholder="e.g. wolfson-guide-01" autocomplete="off">
+        </div>
+        <div class="form-field">
+          <div class="label">מה להכין? (פרומפט חופשי)</div>
+          <textarea class="textarea" id="ai-prompt" data-dir="rtl" style="min-height:100px" placeholder="לדוגמה: בוא נעשה מדריך התקנה קצר בעברית, 6 סצנות, פונה להורים, טון מקצועי ומרגיע"></textarea>
+        </div>
+        <div id="ai-estimate-box" style="display:none;background:var(--navy-900);border:1px solid var(--line);border-radius:var(--r-md);padding:12px;margin-top:12px">
+          <div style="font-weight:600;margin-bottom:6px">הערכת עלות</div>
+          <div id="ai-estimate-body" style="font-size:13px;line-height:1.6;color:var(--mute-500)"></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost modal-dismiss">ביטול</button>
+        <button class="btn btn-ghost" id="ai-estimate-btn">הערך עלות</button>
+        <button class="btn btn-primary" id="ai-approve-btn" disabled>אשר וצור</button>
+      </div>
+    </div>
+  </div>
+</template>
 
 <template id="bp-modal-tpl">
   <div class="modal-backdrop">
@@ -757,9 +799,118 @@ async function openBPModal(id) {
   });
 }
 
+// === AI Generate modal (Claude-powered autonomous draft)
+async function openAiGenModal() {
+  // Preflight: make sure the server has the key + budget remaining
+  let budget = null;
+  try { budget = await fetch("/api/ai/budget").then(r => r.json()); } catch {}
+  if (!budget || !budget.hasKey) {
+    toast("חסר ANTHROPIC_API_KEY בשרת. הוסף אותו ב-Railway Variables.", "err");
+    return;
+  }
+  if (!budget.allowed) {
+    toast(`תקציב ה-AI החודשי מוצה: $${budget.spentUsd} מתוך $${budget.capUsd}`, "err");
+    return;
+  }
+
+  openModal("ai-gen-modal-tpl", ({ close }) => {
+    const $bp = $("#ai-bp"), $tmpl = $("#ai-tmpl"), $name = $("#ai-name"),
+          $prompt = $("#ai-prompt"), $estBtn = $("#ai-estimate-btn"),
+          $approveBtn = $("#ai-approve-btn"), $estBox = $("#ai-estimate-box"),
+          $estBody = $("#ai-estimate-body");
+
+    $bp.innerHTML = BPS.map(p => `<option value="${p.id}">${p.displayName || p.name}</option>`).join("");
+    $tmpl.innerHTML = TEMPLATES.map(t => `<option value="${t.id}">${t.name} · ${t.aspectRatio}</option>`).join("");
+
+    // Auto-pick default template for the selected business project
+    function syncTemplateToBP() {
+      const p = BPS.find(x => x.id === $bp.value);
+      if (p?.defaultTemplate && [...$tmpl.options].some(o => o.value === p.defaultTemplate)) {
+        $tmpl.value = p.defaultTemplate;
+      }
+    }
+    $bp.addEventListener("change", syncTemplateToBP);
+    syncTemplateToBP();
+
+    let estimated = null;
+
+    $estBtn.addEventListener("click", async () => {
+      $estBtn.disabled = true; $estBtn.textContent = "מחשב…";
+      try {
+        const r = await fetch("/api/ai/estimate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            businessProjectId: $bp.value,
+            template: $tmpl.value,
+            prompt: $prompt.value
+          })
+        });
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.error || "estimate failed");
+        estimated = data;
+        $estBox.style.display = "block";
+        $estBody.innerHTML = `
+          <div><b>מודל:</b> ${data.model}</div>
+          <div><b>טוקנים קלט (הערכה):</b> ${data.inputTokens.toLocaleString()}</div>
+          <div><b>טוקנים פלט (מקסימום):</b> ${data.outputTokens.toLocaleString()}</div>
+          <div><b>קבצים מתיקיית המקור:</b> ${data.sourceFilesSeen}</div>
+          <div style="margin-top:6px;padding-top:6px;border-top:1px solid var(--line)">
+            <b style="color:var(--orange-500)">עלות משוערת: $${data.estCostUsd.toFixed(3)}</b>
+            · נותר החודש: $${data.budget.remainingUsd.toFixed(2)} מתוך $${data.budget.capUsd}
+          </div>
+        `;
+        $approveBtn.disabled = false;
+      } catch (e) {
+        toast(`✗ ${e.message}`, "err");
+      } finally {
+        $estBtn.disabled = false; $estBtn.textContent = "הערך מחדש";
+      }
+    });
+
+    $approveBtn.addEventListener("click", async () => {
+      if (!estimated) { toast("קודם לחץ 'הערך עלות'", "err"); return; }
+      const name = $name.value.trim();
+      if (!/^[a-z0-9][a-z0-9-_]*$/i.test(name)) {
+        toast("שם סרטון לא תקין — אנגלית בלבד, בלי רווחים", "err");
+        return;
+      }
+      if (!confirm(`לאשר קריאה ל-Claude בעלות משוערת של $${estimated.estCostUsd.toFixed(3)}?`)) return;
+
+      $approveBtn.disabled = true;
+      $approveBtn.innerHTML = `<span class="spinner"></span> Claude כותב טיוטה…`;
+      try {
+        const r = await fetch("/api/ai/generate-video", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            businessProjectId: $bp.value,
+            template: $tmpl.value,
+            prompt: $prompt.value,
+            videoName: name,
+            approved: true
+          })
+        });
+        const data = await r.json();
+        if (!r.ok || !data.ok) throw new Error(data.error || "generation failed");
+        toast(`✓ "${data.videoName}" נוצר · ${data.itemsApplied}/${data.totalItems} שדות · $${data.estCostUsd.toFixed(3)}`, "ok");
+        location.href = `/edit?project=${encodeURIComponent(data.videoName)}`;
+      } catch (e) {
+        toast(`✗ ${e.message}`, "err");
+        $approveBtn.disabled = false;
+        $approveBtn.textContent = "אשר וצור";
+      }
+    });
+
+    $bp.focus();
+  });
+}
+
 window.openBPModal = openBPModal;
 window.openNewVideoModal = openNewVideoModal;
+window.openAiGenModal = openAiGenModal;
 $("#new-video-btn").addEventListener("click", openNewVideoModal);
+$("#ai-gen-btn").addEventListener("click", openAiGenModal);
 
 loadAll().catch(e => toast("שגיאה בטעינה: " + e.message, "err"));
 </script>

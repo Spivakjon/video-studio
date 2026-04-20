@@ -1,0 +1,11 @@
+{
+  "id": "kikkaboo-os",
+  "name": "kikkaboo-os",
+  "displayName": "Kikkaboo OS",
+  "description": "פרויקט Kikkaboo OS",
+  "sourceDir": "C:\\Users\\spiva\\OneDrive\\Desktop\\כללי פרויקטים\\Projects\\kikkaboo-os",
+  "defaultTemplate": "kikkaboo-4step",
+  "defaultVoice": "Kore",
+  "language": "he",
+  "colors": {}
+}

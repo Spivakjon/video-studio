@@ -1,0 +1,11 @@
+{
+  "id": "dara-gulf",
+  "name": "dara-gulf",
+  "displayName": "Dara Gulf",
+  "description": "פרויקט Dara Gulf",
+  "sourceDir": "C:\\Users\\spiva\\OneDrive\\Desktop\\כללי פרויקטים\\Projects\\dara-gulf",
+  "defaultTemplate": "kikkaboo-4step",
+  "defaultVoice": "Kore",
+  "language": "he",
+  "colors": {}
+}

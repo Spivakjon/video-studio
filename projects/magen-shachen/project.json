@@ -1,0 +1,11 @@
+{
+  "id": "magen-shachen",
+  "name": "magen-shachen",
+  "displayName": "מגן שחן — ממ\"דים",
+  "description": "פרויקט מגן שחן — ממ\"דים",
+  "sourceDir": "C:\\Users\\spiva\\OneDrive\\Desktop\\כללי פרויקטים\\Projects\\magen-shachen",
+  "defaultTemplate": "kikkaboo-4step",
+  "defaultVoice": "Kore",
+  "language": "he",
+  "colors": {}
+}

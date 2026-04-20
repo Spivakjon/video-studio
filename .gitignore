@@ -1,6 +1,9 @@
 .gcp/service-account.json
 .gcp/config.json
 .gcp/usage-log.jsonl
+.ai/usage-log.jsonl
+.env
+.env.local
 node_modules/
 videos/*/audio/raw/
 videos/*/.studio/snapshots/

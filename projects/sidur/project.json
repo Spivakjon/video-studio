@@ -1,0 +1,11 @@
+{
+  "id": "sidur",
+  "name": "sidur",
+  "displayName": "סידור",
+  "description": "פרויקט סידור",
+  "sourceDir": "C:\\Users\\spiva\\OneDrive\\Desktop\\כללי פרויקטים\\sidur",
+  "defaultTemplate": "kikkaboo-4step",
+  "defaultVoice": "Kore",
+  "language": "he",
+  "colors": {}
+}

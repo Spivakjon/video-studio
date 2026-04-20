@@ -1,0 +1,6 @@
+{
+  "monthlyBudgetUsd": 50,
+  "requireApproval": true,
+  "defaultModel": "claude-sonnet-4-6",
+  "note": "Shared with Veo budget policy — every call must be approved in the UI."
+}

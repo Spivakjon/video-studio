@@ -1,0 +1,11 @@
+{
+  "id": "web-and-market",
+  "name": "web-and-market",
+  "displayName": "Web & Market",
+  "description": "פרויקט Web & Market",
+  "sourceDir": "C:\\Users\\spiva\\OneDrive\\Desktop\\כללי פרויקטים\\Projects\\web-and-market",
+  "defaultTemplate": "kikkaboo-4step",
+  "defaultVoice": "Kore",
+  "language": "he",
+  "colors": {}
+}
