@@ -855,8 +855,10 @@ async function openAiGenModal() {
           <div><b>טוקנים קלט (הערכה):</b> ${data.inputTokens.toLocaleString()}</div>
           <div><b>טוקנים פלט (מקסימום):</b> ${data.outputTokens.toLocaleString()}</div>
           <div><b>קבצים מתיקיית המקור:</b> ${data.sourceFilesSeen}</div>
+          <div><b>קבצי Markdown שייקראו:</b> ${(data.sourceMarkdownsSeen||[]).length ? data.sourceMarkdownsSeen.join(", ") : "אין — Claude יעבוד רק מה-context.md"}</div>
+          <div><b>שתי קריאות (טיוטה + fact-check):</b> $${(data.estDraftCostUsd||0).toFixed(3)} + $${(data.estFactCheckCostUsd||0).toFixed(3)}</div>
           <div style="margin-top:6px;padding-top:6px;border-top:1px solid var(--line)">
-            <b style="color:var(--orange-500)">עלות משוערת: $${data.estCostUsd.toFixed(3)}</b>
+            <b style="color:var(--orange-500)">סה"כ משוער: $${data.estCostUsd.toFixed(3)}</b>
             · נותר החודש: $${data.budget.remainingUsd.toFixed(2)} מתוך $${data.budget.capUsd}
           </div>
         `;
@@ -893,7 +895,10 @@ async function openAiGenModal() {
         });
         const data = await r.json();
         if (!r.ok || !data.ok) throw new Error(data.error || "generation failed");
-        toast(`✓ "${data.videoName}" נוצר · ${data.itemsApplied}/${data.totalItems} שדות · $${data.estCostUsd.toFixed(3)}`, "ok");
+        const v = data.review?.verdict;
+        const verdictTag = v === "clean" ? "✓ נקי" : v === "minor" ? "⚠ תיקונים קלים" : v === "major" ? "⚠ תיקונים רציניים" : "";
+        const issueCount = data.review?.issueCount || 0;
+        toast(`✓ "${data.videoName}" · ${data.itemsApplied}/${data.totalItems} שדות · ${verdictTag}${issueCount?` (${issueCount} דגלים)`:``} · $${data.estCostUsd.toFixed(3)}`, "ok");
         location.href = `/edit?project=${encodeURIComponent(data.videoName)}`;
       } catch (e) {
         toast(`✗ ${e.message}`, "err");

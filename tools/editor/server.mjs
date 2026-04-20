@@ -21,7 +21,7 @@ import { resolve, dirname, basename, extname, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFileSync, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { estimateDraft, generateDraft, checkBudget as checkAiBudget } from "../claude-api.mjs";
+import { estimateDraft, generateDraft, factCheckDraft, checkBudget as checkAiBudget } from "../claude-api.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const STUDIO_ROOT = resolve(__dirname, "..", "..");
@@ -930,6 +930,7 @@ const server = createServer(async (req, res) => {
       if (!existsSync(tplManifestPath)) return sendJson(res, 400, { error: "template manifest missing" });
       const template = JSON.parse(readFileSync(tplManifestPath, "utf8"));
 
+      // Step 1 — draft
       let result;
       try {
         result = await generateDraft({
@@ -942,6 +943,34 @@ const server = createServer(async (req, res) => {
         return sendJson(res, 500, { error: String(e.message || e) });
       }
 
+      // Step 2 — fact-check pass. Default ON; callers can opt out with skipFactCheck:true.
+      let review = null;
+      let factCheckCostUsd = 0;
+      const mergedItems = new Map((result.draft.items || []).map(it => [it.id, { ...it }]));
+      if (!body.skipFactCheck) {
+        try {
+          const fc = await factCheckDraft({
+            projectMeta: bp,
+            contextMd,
+            userPrompt: body.prompt || "",
+            draft: result.draft,
+            sourceMarkdowns: result.sourceMarkdowns
+          });
+          review = fc.review;
+          factCheckCostUsd = fc.estCostUsd;
+          // Apply revisedItems on top of the draft
+          for (const r of (review.revisedItems || [])) {
+            if (!r || !r.id || typeof r.value !== "string") continue;
+            const existing = mergedItems.get(r.id) || { id: r.id };
+            mergedItems.set(r.id, { ...existing, value: r.value });
+          }
+        } catch (e) {
+          console.warn("fact-check failed:", e.message);
+          review = { issues: [], revisedItems: [], verdict: "skipped", error: String(e.message || e) };
+        }
+      }
+      const finalItems = Array.from(mergedItems.values());
+
       // Scaffold the new video project using the existing scaffolder.
       let scaffolded;
       try {
@@ -952,14 +981,18 @@ const server = createServer(async (req, res) => {
           businessProject: bp.id
         });
       } catch (e) {
-        return sendJson(res, 500, { error: `scaffold failed: ${e.message}`, draft: result.draft });
+        return sendJson(res, 500, {
+          error: `scaffold failed: ${e.message}`,
+          draft: result.draft,
+          review
+        });
       }
 
-      // Apply Claude's item values on top of the scaffold.
+      // Apply final (post-review) item values on top of the scaffold.
       const manifest = loadManifest(scaffolded.name);
       const byId = new Map(manifest.items.map(it => [it.id, it]));
       const applied = [];
-      for (const d of result.draft.items || []) {
+      for (const d of finalItems) {
         const item = byId.get(d.id);
         if (!item || typeof d.value !== "string") continue;
         item.value = d.value;
@@ -968,12 +1001,22 @@ const server = createServer(async (req, res) => {
       if (result.draft.ttsVoice && typeof result.draft.ttsVoice === "string") {
         manifest.ttsVoice = result.draft.ttsVoice;
       }
+      const totalCostUsd = Number((result.estCostUsd + factCheckCostUsd).toFixed(4));
       manifest.aiDraft = {
         at: new Date().toISOString(),
         model: result.model,
         prompt: body.prompt || "",
         notes: result.draft.notes || "",
-        estCostUsd: result.estCostUsd
+        draftCostUsd: result.estCostUsd,
+        factCheckCostUsd,
+        estCostUsd: totalCostUsd,
+        sourceMarkdownsSeen: (result.sourceMarkdowns?.files || []).map(f => f.rel),
+        review: review ? {
+          verdict: review.verdict,
+          issueCount: (review.issues || []).length,
+          issues: (review.issues || []).slice(0, 20),
+          revisedCount: (review.revisedItems || []).length
+        } : null
       };
       saveManifest(scaffolded.name, manifest);
 
@@ -993,10 +1036,22 @@ const server = createServer(async (req, res) => {
         videoName: scaffolded.name,
         itemsApplied: applied.length,
         totalItems: manifest.items.length,
-        estCostUsd: result.estCostUsd,
+        draftCostUsd: result.estCostUsd,
+        factCheckCostUsd,
+        estCostUsd: totalCostUsd,
         model: result.model,
         notes: result.draft.notes || "",
-        usage: result.usage
+        sourceMarkdownsSeen: (result.sourceMarkdowns?.files || []).map(f => f.rel),
+        review: review ? {
+          verdict: review.verdict,
+          issueCount: (review.issues || []).length,
+          issues: (review.issues || []),
+          revisedCount: (review.revisedItems || []).length
+        } : null,
+        usage: {
+          draft: result.usage,
+          factCheck: review && !review.error ? { requested: true } : { requested: false }
+        }
       });
     }
 
