@@ -24,10 +24,13 @@ import { randomUUID } from "node:crypto";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const STUDIO_ROOT = resolve(__dirname, "..", "..");
-const VIDEOS_DIR = resolve(STUDIO_ROOT, "videos");
-const TEMPLATES_DIR = resolve(STUDIO_ROOT, "templates");
-const BRANDING_DIR = resolve(STUDIO_ROOT, "shared", "branding");
-const BUSINESS_PROJECTS_DIR = resolve(STUDIO_ROOT, "projects");
+// When a persistent volume is mounted (e.g. Railway mounts /app/data), read/write
+// user data there so it survives deploys. Code-owned dirs stay in the image.
+const DATA_ROOT = process.env.STUDIO_DATA_ROOT || STUDIO_ROOT;
+const VIDEOS_DIR = resolve(DATA_ROOT, "videos");
+const BUSINESS_PROJECTS_DIR = resolve(DATA_ROOT, "projects");
+const TEMPLATES_DIR = resolve(STUDIO_ROOT, "templates");   // shipped, read-only
+const BRANDING_DIR = resolve(STUDIO_ROOT, "shared", "branding");   // shipped defaults
 const UI_DIR = resolve(__dirname, "ui");
 const SCAN_ROOT = process.env.STUDIO_SCAN_ROOT ||
   "C:\\Users\\spiva\\OneDrive\\Desktop\\כללי פרויקטים";
@@ -1164,9 +1167,39 @@ ${message}
   }
 });
 
+// One-time seed: if running on a persistent volume and user data is empty,
+// copy shipped videos/projects into the volume so the dashboard isn't empty
+// on first Railway deploy.
+function seedDataRootIfEmpty() {
+  if (DATA_ROOT === STUDIO_ROOT) return;  // local dev — nothing to do
+  try {
+    mkdirSync(DATA_ROOT, { recursive: true });
+    const seedPairs = [
+      [resolve(STUDIO_ROOT, "videos"),   VIDEOS_DIR],
+      [resolve(STUDIO_ROOT, "projects"), BUSINESS_PROJECTS_DIR]
+    ];
+    for (const [from, to] of seedPairs) {
+      if (!existsSync(from)) continue;
+      if (existsSync(to) && readdirSync(to).length > 0) continue;
+      mkdirSync(to, { recursive: true });
+      for (const entry of readdirSync(from)) {
+        const src = resolve(from, entry);
+        const dst = resolve(to, entry);
+        if (statSync(src).isDirectory()) copyRecursive(src, dst);
+      }
+      console.log(`  🌱 seeded ${to} from ${from}`);
+    }
+  } catch (e) {
+    console.warn("  ⚠ seed failed:", e.message);
+  }
+}
+
+seedDataRootIfEmpty();
+
 server.listen(PORT, () => {
   console.log(`\n  Video Studio: http://localhost:${PORT}`);
-  console.log(`  Root:         ${STUDIO_ROOT}`);
+  console.log(`  Code root:    ${STUDIO_ROOT}`);
+  console.log(`  Data root:    ${DATA_ROOT}${DATA_ROOT !== STUDIO_ROOT ? " (persistent volume)" : ""}`);
   console.log(`  Videos:       ${listVideos().length}`);
   console.log(`  Templates:    ${listTemplates().length}\n`);
 });
