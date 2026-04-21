@@ -152,6 +152,65 @@ function readSourceMarkdowns(dir, { maxChars = 24000, maxFiles = 6 } = {}) {
   return { files: kept, totalChars: content.length, content };
 }
 
+// ---------------------------------------------------------------------------
+// SHARED RULES — every pipeline stage (writer, judge, editor, fact-check) gets
+// the same ruleset so corrections don't re-introduce banned material.
+// ---------------------------------------------------------------------------
+
+const BANNED_PHRASES = [
+  "שיכולות להציל חיים",
+  "רגע קריטי",
+  "הורידו עכשיו",
+  "הורידו בחינם",
+  "בחינם לחלוטין",
+  "ללא פרסומות",
+  "הכול במקום אחד",
+  "הכול שם",
+  "הכול של",
+  "במקום אחד",
+  "יודע בדיוק",
+  "מבין אותך",
+  "נותן לכם את התשובה",
+  "נותן את התשובה",
+  "הפתרון המושלם",
+  "הכלי היחיד",
+  "עכשיו או לעולם לא",
+  "אל תחמיצו",
+  "מהפכני",
+  "פורץ דרך",
+  "חכם ומתקדם",
+  "חירום בשנייה",
+  "שגרה בלי בלבול",
+  "בשנייה אחת",
+  "תוך שניות"
+];
+
+const SHARED_RULES = `## SHARED RULES — APPLY AT EVERY STAGE
+
+### Do NOT invent facts
+If a detail is not in the Context, Source markdowns, or User's request, DO NOT
+put it in the script. This applies to writers, editors, and fact-checkers alike.
+Specific forbidden inventions:
+- **Numeric promises** ("תוך 3 שניות", "ב-10 דקות", "100% מדויק") — unless literally in context.
+- **Product-type errors** ("האפליקציה", "הורידו") when the product is a website.
+- **Made-up features** — if it's not listed, it doesn't exist.
+- **Scope drift** — don't change the audience without explicit instruction.
+- **Third-party credit** — if the product is the one doing the work, don't frame
+  downstream tools (Google Maps, etc.) as the hero. Mention them only as plumbing.
+
+### Banned phrases (exact substring check — never use any of these)
+${BANNED_PHRASES.map(p => `- "${p}"`).join("\n")}
+
+This list is enforced programmatically after your output. If you use any of
+these phrases they will be rejected or auto-stripped — you will look silly.
+
+### Tone discipline
+Match the context's "טון" / "Tone" section verbatim. When in doubt, quote the
+context's sample openers or tagline literally instead of paraphrasing.
+
+### Word budget
+Count your words. If you are over budget, tighten until under. 20% under is better than 5% over.`;
+
 const DRAFT_SYSTEM_PROMPT_BASE = `You are a video-script writer for an instructional/marketing video platform.
 Your output must be a SINGLE JSON object, no prose, no markdown fences.
 
@@ -168,56 +227,23 @@ Output schema:
 ## Structural rules
 - Preserve every id from the template "items" array. Rewrite "value" only.
 - Voiceover items: short spoken Hebrew. No stage directions. No "בקול X:" prefixes.
-- Screen items: short punchy labels. Title-case for Hebrew not applicable — use normal sentence form.
+- Screen items: short punchy labels.
 - Hook in the first voiceover (first 2 seconds).
 - Pronunciations: "Kikkaboo" → "קיקבו" (NOT קיקאבו). "I-VAN" → "איי-ואן".
 
-## WORD BUDGET (enforced — count your words)
-
-Hebrew speech at natural pace is ~2.3 words per second. You will be told the total
-target duration. Distribute words across voiceovers so total ≤ 2.3 × duration.
-Count words BEFORE returning — do not exceed. Better to be 10% under than 5% over.
-
 ## SCREEN / VOICEOVER COUPLING
+Screen and voiceover for the same scene are paired, NOT redundant.
+- Voiceover = what the viewer HEARS.
+- Screen = what the viewer READS.
+- Never repeat the same idea in both with similar wording.
 
-The screen and voiceover for the same scene are paired, NOT redundant.
-- Voiceover = what the viewer HEARS (spoken, flowing).
-- Screen = what the viewer READS (anchor phrase, specific word).
-- Never repeat the same idea in both with similar wording. The screen adds a
-  detail the voiceover omits, or reinforces one specific anchor word.
+${SHARED_RULES}
 
-## CRITICAL — DO NOT INVENT FACTS
+## IMITATION TARGETS — USE THESE VERBATIM
 
-If a detail is not in the Project context OR the Source markdown OR the User's request, DO NOT put it in the script. Treat missing detail as "we don't know, leave it out".
-
-Real mistakes from earlier runs — DO NOT REPEAT:
-
-1. **Misreading numbers.** Context said "60 recycling points" — a prior draft wrote "60 emergency scenarios". Never carry a number into a different category.
-2. **Wrong product type.** If context says "website" / "platform at URL", do NOT say "הורידו את האפליקציה" or "האפליקציה מאתרת". Use "האתר" / "המערכת".
-3. **Made-up features.** If a feature is not listed, it does not exist. Don't write "ניהול כוננות" when context talks about pickup reminders.
-4. **Invented metrics.** No "תוך 10 דקות", "100% מדויק" etc. unless the context literally says it.
-5. **Scope drift.** If the audience is "residents", don't pivot to "other municipalities buying the product".
-6. **Giving credit to the wrong component.** If your product finds the nearest X, the hero is YOUR product. Don't frame Google Maps / third parties as the value.
-
-## BANNED PHRASING
-
-Never use these unless the context explicitly says them verbatim:
-- "שיכולות להציל חיים" / "רגע קריטי"
-- "הורידו עכשיו" / "download now"
-- "בחינם לחלוטין" / "ללא פרסומות"
-- "הכול במקום אחד" / "הכול שם"
-- "[המוצר] יודע בדיוק" / "[המוצר] מבין אותך" / "[המוצר] נותן לכם את התשובה"
-- "הפתרון המושלם" / "הכלי היחיד"
-- Urgency fakery: "עכשיו או לעולם לא", "אל תחמיצו"
-- Empty transitions: "חירום בשנייה", "שגרה בלי בלבול", "X בקלות" (adjective-free filler)
-- Self-compliment: "מהפכני", "פורץ דרך", "חכם ומתקדם"
-
-## TONE
-
-Match EXACTLY the "טון" / "Tone" section of the context. When in doubt,
-quote phrases from the context literally instead of paraphrasing. If the
-context suggests specific openers (e.g. "שוב שכחת איזה יום זה גזם?"),
-USE THEM VERBATIM — don't reword.`;
+If the context provides example openers or taglines, you MUST use them literally,
+not paraphrased. A line like "שוב שכחת איזה יום זה גזם?" from context is
+GOLD — put it in verbatim. Your own paraphrase is always weaker.`;
 
 const CREATIVE_DIRECTIONS = {
   sensory: `
@@ -425,7 +451,7 @@ export async function generateDraft(ctx) {
 // ---------------------------------------------------------------------------
 
 const FACT_CHECK_SYSTEM_PROMPT = `You are a strict fact-checker for video scripts.
-Your job: find every claim in the draft that is NOT grounded in the provided context.
+Your job: find every claim in the draft that is NOT grounded in the provided context, AND every banned phrase, AND every numeric/time promise the product doesn't actually make.
 
 Your output must be a SINGLE JSON object, no prose, no markdown fences:
 
@@ -434,7 +460,8 @@ Your output must be a SINGLE JSON object, no prose, no markdown fences:
     {
       "id": "<item id from the draft>",
       "phrase": "<exact phrase that is ungrounded>",
-      "problem": "<one-line explanation: e.g. 'invented number — context says 60 recycling points, not 60 emergency scenarios'>",
+      "problem": "<one-line explanation>",
+      "category": "invented-fact" | "banned-phrase" | "numeric-promise" | "third-party-credit" | "wrong-product-type" | "tone-drift" | "other",
       "severity": "high" | "medium" | "low"
     }
   ],
@@ -444,14 +471,20 @@ Your output must be a SINGLE JSON object, no prose, no markdown fences:
   "verdict": "clean" | "minor" | "major"
 }
 
+## What to flag (HIGH severity)
+- **Numeric/time promises**: "ב-3 שניות", "תוך 10 דקות", "100% מדויק", "במהירות שיא" — unless the context literally contains that exact claim.
+- **Banned phrases** from the SHARED_RULES list — any substring match, flag it.
+- **Third-party credit theft**: "Google Maps מוביל אותך", "WhatsApp דואג לך" — the HERO is the product, downstream tools are plumbing.
+- **Wrong product type**: calling a website "האפליקציה" / asking to "הורידו".
+- **Scope drift**: audience changed without instruction.
+
 ## Rules
-- Only flag claims that are NOT supported by the Context / Source markdowns.
-- Banned clichés count as issues even if grammatically fine: "שיכולות להציל חיים", "הורידו עכשיו", "בחינם לחלוטין ללא פרסומות", "X יודע בדיוק", urgency fakery.
-- If the product is a website in the context, flag any "האפליקציה"/"הורידו" phrasing.
-- Tone drift counts as an issue: if context asks for "warm/civic", flag fear-mongering or hard-sell copy.
 - Preserve the draft's good parts — only rewrite items that actually have an issue.
+- Never invent replacements. Pull wording from the context when rewriting.
 - If nothing is wrong, return {"issues": [], "revisedItems": [], "verdict": "clean"}.
-- Never invent replacements. Pull wording from the context when rewriting.`;
+- If you flag a HIGH severity issue, you MUST provide a revisedItem for it.
+
+${SHARED_RULES}`;
 
 // ---------------------------------------------------------------------------
 // JUDGE — picks the best of N candidate drafts + explicit critique
@@ -479,7 +512,14 @@ Output JSON only:
 - **Emotional resonance** (5%): one line that actually lands?
 
 Be HONEST. If all three drafts are weak, pick the LEAST weak and say so.
-The weaknesses array should be ACTIONABLE — specific items to rewrite, not vague.`;
+
+## WEAKNESS SUGGESTIONS MUST FOLLOW THE SAME RULES AS WRITERS
+
+When you list weaknesses and suggest rewrites, you must NOT recommend a banned
+phrase or an invented fact. Your suggested replacements are held to the same
+bar as the original draft.
+
+${SHARED_RULES}`;
 
 export async function judgeCandidates({ projectMeta, contextMd, userPrompt, template, drafts, wordBudget }) {
   const budget = checkBudget();
@@ -533,14 +573,18 @@ Output JSON only:
   "changeLog": "one short paragraph — what you changed and why"
 }
 
-## Rules
+## Editor rules
 - Include ONLY items you actually changed.
 - Preserve item ids. Rewrite "value" only.
-- Apply the BANNED PHRASING list and WORD BUDGET from the writer prompt — you know them.
 - Fix each listed weakness directly. Don't soften the critique — apply it.
 - Prefer deleting weak phrases to rewriting them. Shorter is usually stronger.
-- Quote verbatim from the context when a sample opener exists — don't paraphrase it.
-- Never introduce new facts. If a weakness says "add X", and X isn't in context, ignore that weakness.`;
+- Quote verbatim from the context when a sample opener/tagline exists.
+- If the director's weakness list suggests a BANNED phrase or an invented
+  fact (numeric promise, third-party credit, etc.), IGNORE that specific
+  suggestion — the director can be wrong. Solve the underlying problem
+  with a compliant rewrite instead, or leave the original if you can't.
+
+${SHARED_RULES}`;
 
 export async function editorPass({ projectMeta, contextMd, userPrompt, chosenDraft, weaknesses, wordBudget, sourceMarkdowns }) {
   const budget = checkBudget();
@@ -664,7 +708,12 @@ export async function generateVideoPipeline(ctx) {
     review = { issues: [], revisedItems: [], verdict: "skipped", error: String(e.message || e) };
   }
 
-  const finalItems = Array.from(mergedItems.values());
+  const mergedItemsArray = Array.from(mergedItems.values());
+
+  // Step 5 — deterministic guardrail: strip any banned phrase that sneaked past all three model stages.
+  const guardrail = applyBannedPhraseGuardrail(mergedItemsArray);
+  const finalItems = guardrail.items;
+
   const totalCostUsd = Number((draftCostUsd + judgeResult.estCostUsd + editorCostUsd + factCheckCostUsd).toFixed(4));
 
   return {
@@ -673,6 +722,7 @@ export async function generateVideoPipeline(ctx) {
     notes: chosen.draft.notes || "",
     sourceMarkdowns: sourceMd,
     wordBudget,
+    guardrailFlags: guardrail.flags,
     pipeline: {
       drafts: draftResults.map(d => ({
         direction: d.creativeDirection,
@@ -693,6 +743,7 @@ export async function generateVideoPipeline(ctx) {
         issues: review.issues || [],
         revisedCount: (review.revisedItems || []).length
       } : null,
+      guardrailFlags: guardrail.flags,
       costs: {
         drafts: Number(draftCostUsd.toFixed(4)),
         judge: Number(judgeResult.estCostUsd.toFixed(4)),
@@ -704,6 +755,40 @@ export async function generateVideoPipeline(ctx) {
     },
     estCostUsd: totalCostUsd
   };
+}
+
+// Deterministic post-processor — strips banned phrases from final items.
+// Called after the pipeline; runs a substring scan and either removes the
+// phrase inline (if it's a trailing cliché) or flags the item for manual fix.
+function applyBannedPhraseGuardrail(items) {
+  const flags = [];
+  const out = items.map(it => {
+    if (typeof it.value !== "string") return it;
+    let value = it.value;
+    let stripped = [];
+    for (const phrase of BANNED_PHRASES) {
+      if (value.includes(phrase)) {
+        // Try to strip gracefully: remove the phrase plus surrounding punctuation/conjunctions
+        const patterns = [
+          new RegExp("\\s*[—\\-,\\.:]*\\s*" + phrase.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&") + "\\s*[—\\-,\\.:]*", "g"),
+          new RegExp(phrase.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&"), "g")
+        ];
+        for (const re of patterns) {
+          if (re.test(value)) {
+            value = value.replace(re, " ").replace(/\s{2,}/g, " ").trim();
+            stripped.push(phrase);
+            break;
+          }
+        }
+      }
+    }
+    if (stripped.length) {
+      flags.push({ id: it.id, stripped, after: value });
+      return { ...it, value };
+    }
+    return it;
+  });
+  return { items: out, flags };
 }
 
 // Internal version of generateDraft used by the pipeline (accepts creativeDirection).
