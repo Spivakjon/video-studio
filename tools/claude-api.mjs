@@ -492,44 +492,43 @@ ${SHARED_RULES}`;
 
 const JUDGE_SYSTEM_PROMPT = `You are a senior creative director reviewing candidate video scripts.
 You receive: the brief, the project context, and N candidate drafts.
-Your job: pick the strongest and explain precisely why, including the weaknesses that still remain.
+
+Your job: pick the best value ITEM-BY-ITEM across all candidates, not the whole draft.
+Each draft has strong and weak scenes. Take the strongest per item.
 
 Output JSON only:
 {
-  "winnerIndex": 0 | 1 | 2,
-  "reason": "one short paragraph — why this draft over the others",
-  "strengths": ["concrete strength 1", "..."],
-  "weaknesses": ["weakness 1 to fix in edit pass", "..."],
-  "score": {"draft0": 1-10, "draft1": 1-10, "draft2": 1-10}
+  "perItem": {
+    "<item-id>": { "winnerIndex": 0 | 1 | 2, "reason": "short why" }
+  },
+  "overallWinnerIndex": 0 | 1 | 2,
+  "wholeDraftScore": {"draft0": 1-10, "draft1": 1-10, "draft2": 1-10},
+  "strengths": ["concrete strength of the compiled best-of"],
+  "weaknesses": ["weakness still present after best-of compilation"]
 }
 
-## Scoring rubric (each axis 1-10, then weight):
-- **Fact faithfulness** (25%): every claim grounded in context? No inventions?
-- **Voice match** (25%): tone matches context exactly? No corporate drift?
-- **Specificity** (20%): concrete details > abstractions? No filler phrases?
-- **Word budget** (15%): stays under the total word limit?
-- **Screen/VO coupling** (10%): screen complements rather than duplicates VO?
-- **Emotional resonance** (5%): one line that actually lands?
+For every item id that appears in ALL drafts, pick a winnerIndex. If only one
+draft has a strong version, pick it. Always use the same item ids the drafts use.
 
-Be HONEST. If all three drafts are weak, pick the LEAST weak and say so.
+## Scoring rubric per item:
+- **Fact faithfulness**: every claim grounded in context? No inventions?
+- **Voice match**: tone matches context exactly? No corporate drift?
+- **Specificity**: concrete details > abstractions? No filler phrases?
+- **Word budget**: short enough to fit the per-scene target?
+- **Screen/VO coupling**: if this is a VO, does it complement the screen (scene 1 hook + last scene CTA are exempt — rhetorical repetition is OK)?
+- **Emotional resonance**: does it land?
+
+Prefer specific over generic, warm over corporate, short over long, context-quoted over paraphrased.
 
 ## WEAKNESS SUGGESTIONS MUST FOLLOW THE SAME RULES AS WRITERS
 
-When you list weaknesses and suggest rewrites, you must NOT recommend a banned
-phrase or an invented fact. Your suggested replacements are held to the same
-bar as the original draft.
+Your suggestions must not recommend a banned phrase or an invented fact.
 
 ${SHARED_RULES}`;
 
 export async function judgeCandidates({ projectMeta, contextMd, userPrompt, template, drafts, wordBudget }) {
   const budget = checkBudget();
   if (!budget.allowed) throw new Error(`Budget exhausted: $${budget.spentUsd}/${budget.capUsd}`);
-
-  const draftsForJudge = drafts.map((d, i) => ({
-    index: i,
-    direction: d.creativeDirection,
-    items: d.draft.items
-  }));
 
   const userMessage =
     `# Brief\n\n${userPrompt}\n\n` +
@@ -539,12 +538,12 @@ export async function judgeCandidates({ projectMeta, contextMd, userPrompt, temp
     drafts.map((d, i) =>
       `## Draft ${i} — direction: ${d.creativeDirection}\n\n\`\`\`json\n${JSON.stringify(d.draft.items, null, 2)}\n\`\`\`\n`
     ).join("\n") +
-    `\nChoose the winner, score all three, list remaining weaknesses as actionable rewrites.`;
+    `\nPick the best version for EACH item id. Output perItem with a winner per id.`;
 
   const { text, usage, estCostUsd } = await callAnthropic({
     system: JUDGE_SYSTEM_PROMPT,
     userMessage,
-    maxTokens: 1500
+    maxTokens: 2500
   });
   const verdict = parseJsonLoose(text);
   logUsage({
@@ -554,9 +553,34 @@ export async function judgeCandidates({ projectMeta, contextMd, userPrompt, temp
     inputTokens: usage.input_tokens,
     outputTokens: usage.output_tokens,
     estCostUsd,
-    winnerIndex: verdict.winnerIndex
+    perItemKeys: Object.keys(verdict.perItem || {}).length,
+    overallWinner: verdict.overallWinnerIndex
   });
   return { verdict, usage, estCostUsd };
+}
+
+// Compile a best-of-item draft from multiple candidates using judge's perItem picks.
+function compileBestOfDraft(drafts, perItem) {
+  // Start with the union of all item ids across drafts, preserving order from the first draft
+  const firstItems = drafts[0].draft.items || [];
+  const idOrder = firstItems.map(it => it.id);
+  // Add any ids that appear only in other drafts
+  for (const d of drafts.slice(1)) {
+    for (const it of (d.draft.items || [])) {
+      if (!idOrder.includes(it.id)) idOrder.push(it.id);
+    }
+  }
+  const compiled = [];
+  for (const id of idOrder) {
+    const pick = perItem?.[id];
+    const winnerIdx = Number.isInteger(pick?.winnerIndex)
+      ? Math.max(0, Math.min(drafts.length - 1, pick.winnerIndex))
+      : 0;
+    const src = (drafts[winnerIdx].draft.items || []).find(it => it.id === id)
+             || (drafts[0].draft.items || []).find(it => it.id === id);
+    if (src) compiled.push({ ...src });
+  }
+  return compiled;
 }
 
 // ---------------------------------------------------------------------------
@@ -620,7 +644,144 @@ export async function editorPass({ projectMeta, contextMd, userPrompt, chosenDra
 }
 
 // ---------------------------------------------------------------------------
-// FULL PIPELINE — 3 drafts → judge → editor → fact-check
+// POLISH — final pass that sees the full picture (word-budget overrun,
+// screen/VO overlap, stripped phrases) and makes one last tightening pass.
+// ---------------------------------------------------------------------------
+
+const POLISH_SYSTEM_PROMPT = `You are the FINAL polish pass for a short video script.
+You receive: the current items, and a NARROW list of items to fix with SPECIFIC issues per item.
+
+Your job: rewrite ONLY the items in the "itemsToFix" list. Leave everything else alone.
+Do not touch items that aren't listed. Do not introduce new problems.
+
+Output JSON only:
+{
+  "polishedItems": [ { "id": "<one of the itemsToFix ids>", "value": "<new value>" } ],
+  "changeLog": "short paragraph — one sentence per item you changed"
+}
+
+## Hard rules
+- You MUST only output items listed in "itemsToFix". If you include any other id, the output is discarded.
+- For each item, address the specific issues listed for it. Do not rewrite for other reasons.
+- Preserve hook/CTA rhetorical repetition when marked as intentional.
+- If the hook scene voiceover echoes its screen text — that is CORRECT, leave it alone.
+- If the CTA scene voiceover must contain the domain, include it (exact form given).
+- Apply all BANNED_PHRASES, no-inventions, and tone rules.
+
+${SHARED_RULES}`;
+
+async function polishPass({ projectMeta, contextMd, userPrompt, items, itemsToFix, sourceMarkdowns, ctaHint }) {
+  if (!itemsToFix.length) return { polished: { polishedItems: [], changeLog: "(nothing to fix)" }, usage: {}, estCostUsd: 0 };
+  const budget = checkBudget();
+  if (!budget.allowed) throw new Error(`Budget exhausted: $${budget.spentUsd}/${budget.capUsd}`);
+  const srcContent = sourceMarkdowns?.content || "";
+
+  const fixList = itemsToFix.map(f => ({
+    id: f.id,
+    currentValue: items.find(it => it.id === f.id)?.value ?? "",
+    issues: f.issues
+  }));
+
+  const userMessage =
+    `# Brief\n\n${userPrompt}\n\n` +
+    `# Context\n\n${contextMd || "(empty)"}\n\n` +
+    `# Source markdowns\n\n${srcContent || "(none)"}\n\n` +
+    `# Full current items (for context only — do NOT rewrite these)\n\n\`\`\`json\n${JSON.stringify(items, null, 2)}\n\`\`\`\n\n` +
+    `# itemsToFix — rewrite ONLY these\n\n\`\`\`json\n${JSON.stringify(fixList, null, 2)}\n\`\`\`\n\n` +
+    (ctaHint ? `# CTA hint\n\nThe voiceover for item(s) ${ctaHint.voIds.join(", ")} MUST contain the domain "${ctaHint.screenDomain}" so listeners know where to go.\n\n` : "") +
+    `Polish ONLY the itemsToFix. Return just those items.`;
+
+  const { text, usage, estCostUsd } = await callAnthropic({
+    system: POLISH_SYSTEM_PROMPT,
+    userMessage,
+    maxTokens: 1800
+  });
+  const out = parseJsonLoose(text);
+  // Filter to only items we asked for — guardrail against polish over-reach
+  const allowedIds = new Set(itemsToFix.map(f => f.id));
+  out.polishedItems = (out.polishedItems || []).filter(p => allowedIds.has(p?.id));
+  logUsage({
+    kind: "polish",
+    projectId: projectMeta?.id,
+    model: MODEL,
+    inputTokens: usage.input_tokens,
+    outputTokens: usage.output_tokens,
+    estCostUsd,
+    itemsPolished: out.polishedItems.length,
+    requested: itemsToFix.length
+  });
+  return { polished: out, usage, estCostUsd };
+}
+
+// ---------------------------------------------------------------------------
+// FINAL SELF-SCORE — re-reads the polished output and rates it on the same
+// rubric. If below threshold, triggers one more targeted polish.
+// ---------------------------------------------------------------------------
+
+const FINAL_SCORE_SYSTEM_PROMPT = `You are the final gate before a video script ships.
+Re-read the polished output like a first-time viewer. Score it HONESTLY.
+
+Output JSON only:
+{
+  "scores": {
+    "factFidelity": 1-10,
+    "voiceMatch": 1-10,
+    "specificity": 1-10,
+    "wordBudget": 1-10,
+    "screenVoCoupling": 1-10,
+    "resonance": 1-10
+  },
+  "overall": 1-10,
+  "itemIssues": [
+    { "id": "<item id>", "issue": "<specific line-level problem>", "suggestion": "<concrete direction for rewrite>" }
+  ],
+  "summary": "one short paragraph — what's good, what's still weak"
+}
+
+## Rules
+- Be honest. If the script is still generic or has clichés or TTS hazards, score it low.
+- itemIssues must be ACTIONABLE — line-level, with a concrete suggestion.
+- Do NOT suggest rewrites that violate SHARED_RULES.
+- Score strictly:
+  - 10 = broadcast-ready, one line that really lands.
+  - 9 = ready with trivial polish.
+  - 8 = usable but not special.
+  - 7 = needs one meaningful rewrite.
+  - ≤6 = significant issues remaining.
+
+${SHARED_RULES}`;
+
+async function finalSelfScore({ projectMeta, contextMd, userPrompt, items, wordBudget }) {
+  const budget = checkBudget();
+  if (!budget.allowed) throw new Error(`Budget exhausted: $${budget.spentUsd}/${budget.capUsd}`);
+  const report = wordBudgetReport(items, wordBudget);
+  const userMessage =
+    `# Brief\n\n${userPrompt}\n\n` +
+    `# Context (context.md)\n\n${contextMd || "(empty)"}\n\n` +
+    `# Final items (post-polish)\n\n\`\`\`json\n${JSON.stringify(items, null, 2)}\n\`\`\`\n\n` +
+    `# Word-count diagnostics\n\n\`\`\`json\n${JSON.stringify(report, null, 2)}\n\`\`\`\n\n` +
+    `Score the script strictly. Flag any line-level issue you'd want fixed before ship.`;
+  const { text, usage, estCostUsd } = await callAnthropic({
+    system: FINAL_SCORE_SYSTEM_PROMPT,
+    userMessage,
+    maxTokens: 1500
+  });
+  const score = parseJsonLoose(text);
+  logUsage({
+    kind: "final-self-score",
+    projectId: projectMeta?.id,
+    model: MODEL,
+    inputTokens: usage.input_tokens,
+    outputTokens: usage.output_tokens,
+    estCostUsd,
+    overall: score.overall ?? 0,
+    issueCount: (score.itemIssues || []).length
+  });
+  return { score, usage, estCostUsd };
+}
+
+// ---------------------------------------------------------------------------
+// FULL PIPELINE — 3 drafts → judge → editor → fact-check → polish → self-score
 // ---------------------------------------------------------------------------
 
 const DIRECTIONS_ORDER = ["sensory", "direct", "restrained"];
@@ -648,10 +809,15 @@ export async function generateVideoPipeline(ctx) {
     drafts: draftResults,
     wordBudget
   });
-  const winnerIdx = Number(judgeResult.verdict.winnerIndex) || 0;
-  const chosen = draftResults[winnerIdx] || draftResults[0];
+  // Scene-level best-of: compile items from the strongest version of each id
+  const perItem = judgeResult.verdict.perItem || {};
+  const overallWinnerIdx = Number.isInteger(judgeResult.verdict.overallWinnerIndex)
+    ? judgeResult.verdict.overallWinnerIndex
+    : 0;
+  const chosen = draftResults[overallWinnerIdx] || draftResults[0];
+  const bestOfItems = compileBestOfDraft(draftResults, perItem);
 
-  // Step 3 — editor pass (apply judge's weaknesses)
+  // Step 3 — editor pass (apply judge's weaknesses to the BEST-OF compiled draft)
   let editedItems = [];
   let editorCostUsd = 0;
   let editorChangeLog = null;
@@ -662,7 +828,7 @@ export async function generateVideoPipeline(ctx) {
         projectMeta: ctx.projectMeta,
         contextMd: ctx.contextMd,
         userPrompt: ctx.userPrompt,
-        chosenDraft: chosen.draft,
+        chosenDraft: { items: bestOfItems, ttsVoice: chosen.draft.ttsVoice, notes: chosen.draft.notes },
         weaknesses,
         wordBudget,
         sourceMarkdowns: sourceMd
@@ -675,8 +841,8 @@ export async function generateVideoPipeline(ctx) {
     }
   }
 
-  // Merge editor edits into chosen draft
-  const mergedItems = new Map(chosen.draft.items.map(it => [it.id, { ...it }]));
+  // Merge editor edits into the best-of compiled draft
+  const mergedItems = new Map(bestOfItems.map(it => [it.id, { ...it }]));
   for (const e of editedItems) {
     if (!e?.id || typeof e.value !== "string") continue;
     mergedItems.set(e.id, { ...(mergedItems.get(e.id) || { id: e.id }), value: e.value });
@@ -712,9 +878,120 @@ export async function generateVideoPipeline(ctx) {
 
   // Step 5 — deterministic guardrail: strip any banned phrase that sneaked past all three model stages.
   const guardrail = applyBannedPhraseGuardrail(mergedItemsArray);
-  const finalItems = guardrail.items;
+  let afterGuardrail = guardrail.items;
 
-  const totalCostUsd = Number((draftCostUsd + judgeResult.estCostUsd + editorCostUsd + factCheckCostUsd).toFixed(4));
+  // Step 6 — deterministic diagnostics for scoped polish.
+  const overlaps = detectScreenVoOverlap(afterGuardrail);
+  const budgetReport = wordBudgetReport(afterGuardrail, wordBudget);
+  const ctaIssue = detectCtaIntegrityIssue(afterGuardrail);
+  const slangIssues = detectSlangInconsistency(afterGuardrail);
+  const screenDups = detectScreenDuplication(afterGuardrail);
+
+  // Build a narrow itemsToFix list — each entry with its specific issues.
+  const fixMap = new Map();
+  const addIssue = (id, issue) => {
+    if (!fixMap.has(id)) fixMap.set(id, []);
+    fixMap.get(id).push(issue);
+  };
+  // Word budget: flag items over per-scene budget OR total overrun → ask to trim
+  if (budgetReport.overBudget) {
+    const hottest = [...budgetReport.perItem].sort((a, b) => b.words - a.words);
+    const trimTarget = Math.max(1, budgetReport.overByWords);
+    // Distribute trims across the longest VO items
+    let toTrim = trimTarget;
+    for (const i of hottest) {
+      if (toTrim <= 0) break;
+      const cut = Math.min(i.words - wordBudget.perSceneBudget, toTrim);
+      if (cut > 0) {
+        addIssue(i.id, `Trim ~${cut} words. Current: ${i.words}, target per scene: ${wordBudget.perSceneBudget}.`);
+        toTrim -= cut;
+      }
+    }
+  }
+  // Overlaps (scene 1 + CTA exempt by detector)
+  for (const o of overlaps) {
+    addIssue(o.voId, `Screen/VO overlap with ${o.screenId} (${o.sharedRun} shared words). Rewrite the VO with a DIFFERENT angle — the screen already carries this.`);
+  }
+  // CTA integrity
+  if (ctaIssue) {
+    for (const voId of ctaIssue.voIds) {
+      addIssue(voId, `CTA scene VO MUST include the domain "${ctaIssue.screenDomain}" so listeners know where to go.`);
+    }
+  }
+  // Slang consistency — TTS cannot pronounce abbreviations
+  for (const s of slangIssues) {
+    addIssue(s.id, `Replace slang with "${s.fullForm}" (TTS reads abbreviations as letters, not words). ${s.reason}`);
+  }
+  // Screen duplication within a scene
+  for (const d of screenDups) {
+    // Flag the second screen item — it's the one that should differ
+    addIssue(d.ids[1], `Another screen in scene ${d.scene} (${d.ids[0]}) shares ${d.sharedRun} words. Rewrite to add a DIFFERENT angle.`);
+  }
+  // Guardrail strips → ask polish to re-smooth the sentence
+  for (const g of guardrail.flags) {
+    addIssue(g.id, `Banned phrase was auto-stripped (${g.stripped.join(", ")}). Re-read and smooth the sentence if awkward.`);
+  }
+
+  const itemsToFix = [...fixMap.entries()].map(([id, issues]) => ({ id, issues }));
+
+  // Step 7 — scoped polish: only if we have concrete items to fix.
+  let polishResult = null;
+  let polishCostUsd = 0;
+  if (itemsToFix.length > 0) {
+    try {
+      const pr = await polishPass({
+        projectMeta: ctx.projectMeta,
+        contextMd: ctx.contextMd,
+        userPrompt: ctx.userPrompt,
+        items: afterGuardrail,
+        itemsToFix,
+        sourceMarkdowns: sourceMd,
+        ctaHint: ctaIssue
+      });
+      polishResult = pr.polished;
+      polishCostUsd = pr.estCostUsd;
+      const polishedMap = new Map(afterGuardrail.map(it => [it.id, { ...it }]));
+      for (const p of (polishResult.polishedItems || [])) {
+        if (!p?.id || typeof p.value !== "string") continue;
+        polishedMap.set(p.id, { ...(polishedMap.get(p.id) || { id: p.id }), value: p.value });
+      }
+      afterGuardrail = Array.from(polishedMap.values());
+      // Re-run guardrail just in case polish introduced a banned phrase
+      const g2 = applyBannedPhraseGuardrail(afterGuardrail);
+      afterGuardrail = g2.items;
+      if (g2.flags.length) guardrail.flags.push(...g2.flags);
+    } catch (e) {
+      console.warn("polish failed:", e.message);
+    }
+  }
+
+  // Step 8 — deterministic slang replacement in voiceovers (e.g. "דפי" → "דפיברילטור").
+  // Regex-based, cannot be ignored by the model. Screens are left alone.
+  const slangReplace = applySlangReplacementInVoiceovers(afterGuardrail);
+  afterGuardrail = slangReplace.items;
+
+  // Step 9 — final self-score (report only, no iteration — iteration was
+  // found to regress quality more than it improved).
+  let finalScoreResult = null;
+  let finalScoreCostUsd = 0;
+  try {
+    const s = await finalSelfScore({
+      projectMeta: ctx.projectMeta,
+      contextMd: ctx.contextMd,
+      userPrompt: ctx.userPrompt,
+      items: afterGuardrail,
+      wordBudget
+    });
+    finalScoreResult = s.score;
+    finalScoreCostUsd = s.estCostUsd;
+  } catch (e) {
+    console.warn("final self-score failed:", e.message);
+  }
+
+  const finalItems = afterGuardrail;
+  const finalBudgetReport = wordBudgetReport(finalItems, wordBudget);
+  const finalOverlaps = detectScreenVoOverlap(finalItems);
+  const totalCostUsd = Number((draftCostUsd + judgeResult.estCostUsd + editorCostUsd + factCheckCostUsd + polishCostUsd + finalScoreCostUsd).toFixed(4));
 
   return {
     finalItems,
@@ -728,9 +1005,10 @@ export async function generateVideoPipeline(ctx) {
         direction: d.creativeDirection,
         items: d.draft.items,
         estCostUsd: d.estCostUsd,
-        score: judgeResult.verdict.score?.[`draft${draftResults.indexOf(d)}`] ?? null
+        score: judgeResult.verdict.wholeDraftScore?.[`draft${draftResults.indexOf(d)}`] ?? null
       })),
-      winnerIndex: winnerIdx,
+      perItemPicks: perItem,
+      winnerIndex: overallWinnerIdx,
       winnerDirection: chosen.creativeDirection,
       judgeReason: judgeResult.verdict.reason || "",
       judgeStrengths: judgeResult.verdict.strengths || [],
@@ -744,17 +1022,225 @@ export async function generateVideoPipeline(ctx) {
         revisedCount: (review.revisedItems || []).length
       } : null,
       guardrailFlags: guardrail.flags,
+      polishApplied: Boolean(polishResult),
+      polishChangeLog: polishResult?.changeLog || null,
+      polishItemsChanged: (polishResult?.polishedItems || []).length,
+      polishItemsRequested: itemsToFix.length,
+      polishDiagnostics: {
+        overBudget: budgetReport.overBudget,
+        overByWords: budgetReport.overByWords,
+        overlaps: overlaps.length,
+        ctaIntegrityIssue: Boolean(ctaIssue),
+        slangIssues: slangIssues.length,
+        screenDuplications: screenDups.length,
+        guardrailStripped: guardrail.flags.length
+      },
+      finalSelfScore: finalScoreResult,
+      slangReplacements: slangReplace.changed,
+      wordBudgetReport: finalBudgetReport,
+      screenVoOverlapsBefore: overlaps.length,
+      screenVoOverlapsAfter: finalOverlaps.length,
       costs: {
         drafts: Number(draftCostUsd.toFixed(4)),
         judge: Number(judgeResult.estCostUsd.toFixed(4)),
         editor: Number(editorCostUsd.toFixed(4)),
         factCheck: Number(factCheckCostUsd.toFixed(4)),
+        polish: Number(polishCostUsd.toFixed(4)),
+        finalScore: Number(finalScoreCostUsd.toFixed(4)),
         total: totalCostUsd
       },
       model: MODEL
     },
     estCostUsd: totalCostUsd
   };
+}
+
+// Deterministic word-count check for voiceover items.
+function countHebrewWords(s) {
+  return (s || "").trim().split(/\s+/).filter(Boolean).length;
+}
+
+function wordBudgetReport(items, wordBudget) {
+  let total = 0;
+  const perItem = [];
+  for (const it of items) {
+    if (it.kind !== "voiceover" && !String(it.id || "").startsWith("vo-")) continue;
+    const wc = countHebrewWords(it.value);
+    total += wc;
+    perItem.push({ id: it.id, words: wc, overPerScene: wc > wordBudget.perSceneBudget + 2 });
+  }
+  return {
+    total,
+    target: wordBudget.totalWordBudget,
+    perScene: wordBudget.perSceneBudget,
+    overBudget: total > wordBudget.totalWordBudget,
+    overByWords: Math.max(0, total - wordBudget.totalWordBudget),
+    perItem
+  };
+}
+
+// Programmatic screen/VO overlap detector — flags scenes where screen caption
+// and voiceover share 4+ consecutive Hebrew words.
+//
+// IMPORTANT EXEMPTIONS (intentional rhetorical overlap, not a defect):
+//   - Scene 1 (the hook) — the VO repeating the hook text is the whole point.
+//   - CTA scene (the last scene with domain-like items) — audio echoing the URL
+//     aids memorability.
+function detectScreenVoOverlap(items) {
+  const byScene = new Map();
+  const sceneIds = new Set();
+  for (const it of items) {
+    const sceneId = it.scene ?? Number(String(it.id || "").match(/\d+/)?.[0]);
+    if (sceneId == null) continue;
+    sceneIds.add(sceneId);
+    if (!byScene.has(sceneId)) byScene.set(sceneId, { screens: [], voiceovers: [] });
+    const bucket = byScene.get(sceneId);
+    if (it.kind === "voiceover" || String(it.id || "").startsWith("vo-")) bucket.voiceovers.push(it);
+    else bucket.screens.push(it);
+  }
+  const sceneNumbers = [...sceneIds].filter(n => Number.isFinite(n)).sort((a, b) => a - b);
+  const hookScene = sceneNumbers[0]; // usually 1
+  const ctaScene = sceneNumbers[sceneNumbers.length - 1]; // usually the last
+  const exemptScenes = new Set([hookScene, ctaScene]);
+
+  const overlaps = [];
+  const tokenize = s => (s || "").replace(/[.,!?—\-:;"'()\[\]]/g, " ").split(/\s+/).filter(w => w.length > 1);
+  for (const [scene, { screens, voiceovers }] of byScene) {
+    if (exemptScenes.has(scene)) continue; // hook + CTA overlap is intentional
+    for (const v of voiceovers) {
+      const vTokens = tokenize(v.value);
+      for (const s of screens) {
+        const sTokens = new Set(tokenize(s.value));
+        let maxRun = 0, run = 0;
+        for (const t of vTokens) {
+          if (sTokens.has(t)) { run++; maxRun = Math.max(maxRun, run); }
+          else run = 0;
+        }
+        if (maxRun >= 4) {
+          overlaps.push({ scene, screenId: s.id, voId: v.id, sharedRun: maxRun });
+        }
+      }
+    }
+  }
+  return overlaps;
+}
+
+// CTA integrity: if any screen item in the last scene looks like a domain,
+// the voiceover of that scene must include the domain too.
+function detectCtaIntegrityIssue(items) {
+  const sceneIds = new Set();
+  for (const it of items) {
+    const s = it.scene ?? Number(String(it.id || "").match(/\d+/)?.[0]);
+    if (s != null) sceneIds.add(s);
+  }
+  const lastScene = [...sceneIds].filter(n => Number.isFinite(n)).sort((a, b) => b - a)[0];
+  if (lastScene == null) return null;
+  const lastItems = items.filter(it => (it.scene ?? Number(String(it.id || "").match(/\d+/)?.[0])) === lastScene);
+  const screens = lastItems.filter(it => it.kind !== "voiceover" && !String(it.id || "").startsWith("vo-"));
+  const voiceovers = lastItems.filter(it => it.kind === "voiceover" || String(it.id || "").startsWith("vo-"));
+  const domainRe = /[a-z0-9-]+\.(co\.il|com|org|net|il|io|app)/i;
+  let screenDomain = null;
+  for (const s of screens) {
+    const m = String(s.value || "").match(domainRe);
+    if (m) { screenDomain = m[0]; break; }
+  }
+  if (!screenDomain) return null;
+  const voHas = voiceovers.some(v => String(v.value || "").toLowerCase().includes(screenDomain.toLowerCase()));
+  if (!voHas) return { lastScene, screenDomain, voIds: voiceovers.map(v => v.id) };
+  return null;
+}
+
+// Slang → canonical pairs. Any VO that uses slang MUST be rewritten with the
+// full form, because TTS can't pronounce Hebrew abbreviations (e.g. "דפי"
+// would read as the letter dalet-fey, not "defibrillator"). Screens may still
+// use the slang — they're text, not speech.
+const SLANG_PAIRS = [
+  { full: "דפיברילטור", slang: ["דפי", "הדפי", "דפי'"] }
+];
+function detectSlangInconsistency(items) {
+  const issues = [];
+  for (const pair of SLANG_PAIRS) {
+    for (const it of items) {
+      const isVo = it.kind === "voiceover" || String(it.id || "").startsWith("vo-");
+      if (!isVo) continue;
+      const val = String(it.value || "");
+      if (pair.slang.some(s => new RegExp("(^|\\s|[—\\-])" + s + "(\\s|[,.—\\-:?!]|$)").test(val))
+          && !val.includes(pair.full)) {
+        issues.push({
+          id: it.id,
+          slangFound: true,
+          fullForm: pair.full,
+          reason: "VO slang — TTS cannot pronounce abbreviations. Use full Hebrew form."
+        });
+      }
+    }
+  }
+  return issues;
+}
+
+// Screen-within-scene duplication: two screen items in the same scene sharing
+// a meaningful phrase (3+ content words). Signal the polish pass to differentiate.
+function detectScreenDuplication(items) {
+  const byScene = new Map();
+  for (const it of items) {
+    const isVo = it.kind === "voiceover" || String(it.id || "").startsWith("vo-");
+    if (isVo) continue;
+    const sceneId = it.scene ?? Number(String(it.id || "").match(/\d+/)?.[0]);
+    if (sceneId == null) continue;
+    if (!byScene.has(sceneId)) byScene.set(sceneId, []);
+    byScene.get(sceneId).push(it);
+  }
+  const dups = [];
+  const tokenize = s => (s || "").replace(/[.,!?—\-:;"'()\[\]→←·]/g, " ").split(/\s+/).filter(w => w.length > 1);
+  for (const [scene, screens] of byScene) {
+    for (let i = 0; i < screens.length; i++) {
+      for (let j = i + 1; j < screens.length; j++) {
+        const a = tokenize(screens[i].value);
+        const b = new Set(tokenize(screens[j].value));
+        let run = 0, max = 0;
+        for (const t of a) {
+          if (b.has(t)) { run++; max = Math.max(max, run); }
+          else run = 0;
+        }
+        if (max >= 2) { // 2 content words in screen text is already a dup given brevity
+          dups.push({ scene, ids: [screens[i].id, screens[j].id], sharedRun: max });
+        }
+      }
+    }
+  }
+  return dups;
+}
+
+// Deterministic slang replacement for voiceover items. Regex-based so it
+// CANNOT fail or be ignored by a model. Screen items are left alone — TTS
+// doesn't read them.
+const SLANG_REPLACE = [
+  // Hebrew dalet-fey abbreviation for "defibrillator"
+  {
+    pattern: /(^|[\s—\-:,.?!"'(\[])(ה?)דפי(['\u05f3]?)(?=[\s—\-:,.?!"')\]]|$)/g,
+    replacement: "$1$2דפיברילטור"
+  }
+];
+function applySlangReplacementInVoiceovers(items) {
+  const changed = [];
+  const out = items.map(it => {
+    const isVo = it.kind === "voiceover" || String(it.id || "").startsWith("vo-");
+    if (!isVo || typeof it.value !== "string") return it;
+    let value = it.value;
+    for (const rule of SLANG_REPLACE) {
+      if (rule.pattern.test(value)) {
+        // Reset lastIndex after test
+        rule.pattern.lastIndex = 0;
+        const next = value.replace(rule.pattern, rule.replacement);
+        if (next !== value) {
+          changed.push({ id: it.id, before: value, after: next });
+          value = next;
+        }
+      }
+    }
+    return value !== it.value ? { ...it, value } : it;
+  });
+  return { items: out, changed };
 }
 
 // Deterministic post-processor — strips banned phrases from final items.
