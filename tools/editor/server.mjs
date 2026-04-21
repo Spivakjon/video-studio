@@ -21,7 +21,7 @@ import { resolve, dirname, basename, extname, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFileSync, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { estimateDraft, generateDraft, generateVideoPipeline, factCheckDraft, checkBudget as checkAiBudget } from "../claude-api.mjs";
+import { estimateDraft, generateDraft, generateVideoPipeline, interviewUser, factCheckDraft, checkBudget as checkAiBudget } from "../claude-api.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const STUDIO_ROOT = resolve(__dirname, "..", "..");
@@ -899,6 +899,31 @@ const server = createServer(async (req, res) => {
     if (req.method === "GET" && path === "/api/ai/budget") {
       return sendJson(res, 200, { ...checkAiBudget(), hasKey: Boolean(process.env.ANTHROPIC_API_KEY) });
     }
+    if (req.method === "POST" && path === "/api/ai/interview") {
+      if (!process.env.ANTHROPIC_API_KEY) {
+        return sendJson(res, 400, { error: "ANTHROPIC_API_KEY not set on server" });
+      }
+      const body = JSON.parse((await readBody(req)).toString("utf8"));
+      const bp = loadBusinessProject(body.businessProjectId);
+      if (!bp) return sendJson(res, 400, { error: "business project not found" });
+      const ctxPath = resolve(businessProjectDir(body.businessProjectId), "context.md");
+      const contextMd = existsSync(ctxPath) ? readFileSync(ctxPath, "utf8") : "";
+      const tplDir = resolve(TEMPLATES_DIR, safeName(body.template || bp.defaultTemplate || "kikkaboo-4step"));
+      const tplManifestPath = resolve(tplDir, "texts-manifest.json");
+      if (!existsSync(tplManifestPath)) return sendJson(res, 400, { error: "template manifest missing" });
+      const template = JSON.parse(readFileSync(tplManifestPath, "utf8"));
+      try {
+        const r = await interviewUser({
+          projectMeta: bp,
+          contextMd,
+          template,
+          userPrompt: body.prompt || ""
+        });
+        return sendJson(res, 200, { questions: r.questions, estCostUsd: r.estCostUsd });
+      } catch (e) {
+        return sendJson(res, 500, { error: String(e.message || e) });
+      }
+    }
     if (req.method === "POST" && path === "/api/ai/estimate") {
       const body = JSON.parse((await readBody(req)).toString("utf8"));
       const bp = loadBusinessProject(body.businessProjectId);
@@ -930,14 +955,15 @@ const server = createServer(async (req, res) => {
       if (!existsSync(tplManifestPath)) return sendJson(res, 400, { error: "template manifest missing" });
       const template = JSON.parse(readFileSync(tplManifestPath, "utf8"));
 
-      // Run the full quality pipeline: 3 drafts → judge → editor → fact-check
+      // Run the full quality pipeline: 3 drafts → judge → editor → fact-check → polish
       let pipeline;
       try {
         pipeline = await generateVideoPipeline({
           projectMeta: bp,
           contextMd,
           template,
-          userPrompt: body.prompt || ""
+          userPrompt: body.prompt || "",
+          interview: body.interview || null
         });
       } catch (e) {
         return sendJson(res, 500, { error: String(e.message || e) });

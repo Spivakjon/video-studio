@@ -240,9 +240,15 @@
           <div style="font-weight:600;margin-bottom:6px">הערכת עלות</div>
           <div id="ai-estimate-body" style="font-size:13px;line-height:1.6;color:var(--mute-500)"></div>
         </div>
+        <div id="ai-interview-box" style="display:none;background:var(--navy-900);border:1px solid var(--line);border-radius:var(--r-md);padding:12px;margin-top:12px">
+          <div style="font-weight:600;margin-bottom:4px">שאלות מכוונות (מלא מה שאתה יודע, דלג על מה שאתה לא)</div>
+          <div style="font-size:12px;color:var(--mute-500);margin-bottom:10px">ה-AI ישתמש בתשובות האלה לפני הכתיבה — יותר תשובות = סרטון הדוק יותר.</div>
+          <div id="ai-interview-list" style="display:flex;flex-direction:column;gap:10px"></div>
+        </div>
       </div>
       <div class="modal-footer">
         <button class="btn btn-ghost modal-dismiss">ביטול</button>
+        <button class="btn btn-ghost" id="ai-interview-btn">ראיין אותי</button>
         <button class="btn btn-ghost" id="ai-estimate-btn">הערך עלות</button>
         <button class="btn btn-primary" id="ai-approve-btn" disabled>אשר וצור</button>
       </div>
@@ -816,8 +822,14 @@ async function openAiGenModal() {
   openModal("ai-gen-modal-tpl", ({ close }) => {
     const $bp = $("#ai-bp"), $tmpl = $("#ai-tmpl"), $name = $("#ai-name"),
           $prompt = $("#ai-prompt"), $estBtn = $("#ai-estimate-btn"),
+          $interviewBtn = $("#ai-interview-btn"),
           $approveBtn = $("#ai-approve-btn"), $estBox = $("#ai-estimate-box"),
-          $estBody = $("#ai-estimate-body");
+          $estBody = $("#ai-estimate-body"),
+          $interviewBox = $("#ai-interview-box"),
+          $interviewList = $("#ai-interview-list");
+
+    // Collected interview answers keyed by question id
+    let interviewQuestions = [];
 
     $bp.innerHTML = BPS.map(p => `<option value="${p.id}">${p.displayName || p.name}</option>`).join("");
     $tmpl.innerHTML = TEMPLATES.map(t => `<option value="${t.id}">${t.name} · ${t.aspectRatio}</option>`).join("");
@@ -833,6 +845,54 @@ async function openAiGenModal() {
     syncTemplateToBP();
 
     let estimated = null;
+
+    $interviewBtn.addEventListener("click", async () => {
+      $interviewBtn.disabled = true; $interviewBtn.textContent = "שואל…";
+      try {
+        const r = await fetch("/api/ai/interview", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            businessProjectId: $bp.value,
+            template: $tmpl.value,
+            prompt: $prompt.value
+          })
+        });
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.error || "interview failed");
+        interviewQuestions = data.questions || [];
+        $interviewList.innerHTML = interviewQuestions.map((q, i) => `
+          <div class="form-field" style="margin:0">
+            <div class="label" style="display:flex;align-items:baseline;gap:6px">
+              <span style="color:var(--orange-500);font-weight:700">${i + 1}.</span>
+              <span>${q.question}</span>
+            </div>
+            ${q.why ? `<div class="hint" style="color:var(--mute-500);font-size:11px">למה: ${q.why}</div>` : ""}
+            <textarea class="textarea ai-interview-answer" data-qid="${q.id}" data-question="${(q.question || "").replace(/"/g, "&quot;")}" style="min-height:60px" placeholder="${(q.example || "").replace(/"/g, "&quot;")}" data-dir="rtl"></textarea>
+          </div>
+        `).join("");
+        $interviewBox.style.display = "block";
+      } catch (e) {
+        toast(`✗ ${e.message}`, "err");
+      } finally {
+        $interviewBtn.disabled = false;
+        $interviewBtn.textContent = interviewQuestions.length ? "שאל שוב" : "ראיין אותי";
+      }
+    });
+
+    function collectInterviewAnswers() {
+      const qa = [];
+      for (const ta of $$(".ai-interview-answer", $interviewList)) {
+        const answer = ta.value.trim();
+        if (!answer) continue;
+        qa.push({
+          id: ta.dataset.qid,
+          question: ta.dataset.question,
+          answer
+        });
+      }
+      return qa.length ? { qa } : null;
+    }
 
     $estBtn.addEventListener("click", async () => {
       $estBtn.disabled = true; $estBtn.textContent = "מחשב…";
@@ -890,7 +950,8 @@ async function openAiGenModal() {
             template: $tmpl.value,
             prompt: $prompt.value,
             videoName: name,
-            approved: true
+            approved: true,
+            interview: collectInterviewAnswers()
           })
         });
         const data = await r.json();

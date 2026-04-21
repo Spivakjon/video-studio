@@ -80,6 +80,80 @@ export function logUsage(entry) {
 }
 
 // ---------------------------------------------------------------------------
+// INTERVIEW — ask the user targeted questions BEFORE generating.
+// Cheap call (~$0.01) that returns 5-7 specific prompts, each with a hint.
+// The user's answers are then threaded into the draft context.
+// ---------------------------------------------------------------------------
+
+const INTERVIEW_SYSTEM_PROMPT = `You are a senior copywriter preparing to brief a junior writer
+on a short video script. You have the project context, template, and the user's initial prompt,
+but you need MORE. Generate 5-7 targeted questions the user can answer (optionally) to make
+the script land harder than a blind attempt.
+
+Output JSON only:
+{
+  "questions": [
+    {
+      "id": "q1" | "q2" | ...,
+      "question": "<the question in Hebrew, direct, short>",
+      "why": "<one short line — why this answer changes the script>",
+      "example": "<an example answer that shows the shape of a useful reply>"
+    }
+  ]
+}
+
+## What makes a good question
+- **Specific, not generic.** Don't ask "what tone?" — ask "describe the tone in 5 words, like a sentence to a neighbor".
+- **Unlocks a creative decision.** The answer should change a line of copy, not add decoration.
+- **Fills a gap the context doesn't fill.** Don't ask what's already in context.md.
+- **Optional to skip.** The user should be able to skip and still get a reasonable script.
+
+## Question categories to draw from (pick 5-7 most useful, not all):
+- **The ONE line**: "what's the ONE sentence you want the viewer to still remember tomorrow?"
+- **The specific viewer**: "describe ONE person watching this — name, age, what they're doing right now"
+- **Voice sample**: "write 1-2 sentences in the EXACT voice you want, even if rough"
+- **Hero moment**: "which scene is the beating heart — emergency, routine, or community?"
+- **Open vs close**: "should the video end loud or quiet? big or small?"
+- **Avoidance**: "what word/phrase must NEVER appear?"
+- **Visual anchor**: "one thing the viewer MUST see on screen, not hear"
+- **The aha**: "what's the surprising/interesting thing most people don't know about this?"
+
+Tailor questions to THIS project — look at context, brief, and product type.
+If context says "no fear-mongering" — don't ask about fear; ask about warmth.
+If brief is about an emergency tool — the hero moment question matters a lot.
+
+Hebrew responses only. Keep questions under 15 words each.`;
+
+export async function interviewUser({ projectMeta, contextMd, template, userPrompt }) {
+  const budget = checkBudget();
+  if (!budget.allowed) throw new Error(`Budget exhausted: $${budget.spentUsd}/${budget.capUsd}`);
+
+  const userMessage =
+    `# Business project\n\`\`\`json\n${JSON.stringify(projectMeta, null, 2)}\n\`\`\`\n\n` +
+    `# Context (context.md)\n\n${contextMd || "(empty)"}\n\n` +
+    `# Template name: ${template?.project || "?"} — duration: ${template?.duration || "?"}\n\n` +
+    `# User's initial brief\n\n${userPrompt || "(none — user just picked a project and template)"}\n\n` +
+    `Generate the 5-7 most useful questions for THIS project.`;
+
+  const { text, usage, estCostUsd } = await callAnthropic({
+    system: INTERVIEW_SYSTEM_PROMPT,
+    userMessage,
+    maxTokens: 1500
+  });
+  const out = parseJsonLoose(text);
+  logUsage({
+    kind: "interview",
+    projectId: projectMeta?.id,
+    model: MODEL,
+    inputTokens: usage.input_tokens,
+    outputTokens: usage.output_tokens,
+    estCostUsd,
+    questionCount: (out.questions || []).length
+  });
+  return { questions: out.questions || [], usage, estCostUsd };
+}
+
+// ---------------------------------------------------------------------------
 // Context gathering
 // ---------------------------------------------------------------------------
 
@@ -295,15 +369,36 @@ function wordBudgetForTemplate(template) {
   return { totalDuration, voScenes, totalWordBudget, perSceneBudget, wpsUsed: wpsClarity };
 }
 
-function buildDraftContext({ projectMeta, contextMd, template, userPrompt, creativeDirection }) {
+function formatInterviewAnswers(interview) {
+  if (!interview || typeof interview !== "object") return "";
+  const qa = interview.qa || interview.answers;
+  if (!qa || (Array.isArray(qa) && qa.length === 0)) return "";
+  const items = Array.isArray(qa)
+    ? qa
+    : Object.entries(qa).map(([id, entry]) => ({
+        id,
+        question: entry.question || id,
+        answer: typeof entry === "string" ? entry : entry.answer
+      }));
+  const filled = items.filter(it => (it.answer || "").trim().length > 0);
+  if (!filled.length) return "";
+  const lines = filled.map(it =>
+    `### ${it.question || it.id}\n${it.answer.trim()}`
+  );
+  return "\n\n" + lines.join("\n\n");
+}
+
+function buildDraftContext({ projectMeta, contextMd, template, userPrompt, creativeDirection, interview }) {
   const sourceFiles = scanSourceDir(projectMeta.sourceDir || "");
   const sourceMd = readSourceMarkdowns(projectMeta.sourceDir || "");
   const budget = wordBudgetForTemplate(template);
+  const interviewBlock = formatInterviewAnswers(interview);
 
   const userMessage =
     `# Business project (project.json)\n\n` +
     `\`\`\`json\n${JSON.stringify(projectMeta, null, 2)}\n\`\`\`\n\n` +
     `# Project context (context.md — curated by human)\n\n${contextMd || "(empty)"}\n\n` +
+    (interviewBlock ? `# User's answers to the interview (AUTHORITATIVE — these override generic defaults)${interviewBlock}\n\n` : "") +
     `# Source markdowns (real repo docs — AUTHORITATIVE for facts)\n\n` +
     (sourceMd.content || "(no markdown files found in sourceDir)") + "\n\n" +
     `# Source folder listing (${sourceFiles.length} entries — names only)\n\n` +
@@ -316,7 +411,8 @@ function buildDraftContext({ projectMeta, contextMd, template, userPrompt, creat
     `- TOTAL Hebrew word budget across ALL voiceover items: **${budget.totalWordBudget} words**\n` +
     `- Suggested per voiceover scene: ~${budget.perSceneBudget} words\n` +
     `- Count your words. If over budget, tighten until under. Being 20% under is fine.\n\n` +
-    `# User's request\n\n${userPrompt}\n\n` +
+    `# User's initial brief\n\n${userPrompt}\n\n` +
+    (interviewBlock ? `IMPORTANT: the user's interview answers above take precedence over any defaults. If the user gave a sample line, use its voice. If they gave a "ONE line to remember" — use it or something very close. If they banned a word, do not use it.\n\n` : "") +
     `Produce the JSON draft now. Re-check every claim against the sections above.`;
 
   return {
@@ -793,17 +889,25 @@ export async function generateVideoPipeline(ctx) {
   const wordBudget = wordBudgetForTemplate(ctx.template);
   const sourceMd = readSourceMarkdowns(ctx.projectMeta.sourceDir || "");
 
-  // Step 1 — parallel drafts
+  // If the user answered interview questions, fold them into the contextMd
+  // that downstream stages (editor, polish, fact-check) see, so they respect
+  // the user's voice constraints too. The draft stage receives the interview
+  // separately via buildDraftContext — that stage gets AUTHORITATIVE framing.
+  const interviewBlock = formatInterviewAnswers(ctx.interview);
+  const contextMdForStages = (ctx.contextMd || "") +
+    (interviewBlock ? `\n\n## User interview answers (authoritative)${interviewBlock}` : "");
+
+  // Step 1 — parallel drafts (each stage sees the raw interview + raw contextMd)
   const draftPromises = DIRECTIONS_ORDER.map(direction =>
     generateDraftInternal({ ...ctx, creativeDirection: direction })
   );
   const draftResults = await Promise.all(draftPromises);
   const draftCostUsd = draftResults.reduce((s, r) => s + r.estCostUsd, 0);
 
-  // Step 2 — judge
+  // Step 2 — judge (uses interview-augmented context)
   const judgeResult = await judgeCandidates({
     projectMeta: ctx.projectMeta,
-    contextMd: ctx.contextMd,
+    contextMd: contextMdForStages,
     userPrompt: ctx.userPrompt,
     template: ctx.template,
     drafts: draftResults,
@@ -826,7 +930,7 @@ export async function generateVideoPipeline(ctx) {
     try {
       const ed = await editorPass({
         projectMeta: ctx.projectMeta,
-        contextMd: ctx.contextMd,
+        contextMd: contextMdForStages,
         userPrompt: ctx.userPrompt,
         chosenDraft: { items: bestOfItems, ttsVoice: chosen.draft.ttsVoice, notes: chosen.draft.notes },
         weaknesses,
@@ -858,7 +962,7 @@ export async function generateVideoPipeline(ctx) {
   try {
     const fc = await factCheckDraft({
       projectMeta: ctx.projectMeta,
-      contextMd: ctx.contextMd,
+      contextMd: contextMdForStages,
       userPrompt: ctx.userPrompt,
       draft: mergedDraft,
       sourceMarkdowns: sourceMd
@@ -941,7 +1045,7 @@ export async function generateVideoPipeline(ctx) {
     try {
       const pr = await polishPass({
         projectMeta: ctx.projectMeta,
-        contextMd: ctx.contextMd,
+        contextMd: contextMdForStages,
         userPrompt: ctx.userPrompt,
         items: afterGuardrail,
         itemsToFix,
@@ -977,7 +1081,7 @@ export async function generateVideoPipeline(ctx) {
   try {
     const s = await finalSelfScore({
       projectMeta: ctx.projectMeta,
-      contextMd: ctx.contextMd,
+      contextMd: contextMdForStages,
       userPrompt: ctx.userPrompt,
       items: afterGuardrail,
       wordBudget
@@ -1277,7 +1381,7 @@ function applyBannedPhraseGuardrail(items) {
   return { items: out, flags };
 }
 
-// Internal version of generateDraft used by the pipeline (accepts creativeDirection).
+// Internal version of generateDraft used by the pipeline (accepts creativeDirection + interview).
 async function generateDraftInternal(ctx) {
   const { systemPrompt, userMessage, sourceFiles, sourceMarkdowns, wordBudget, creativeDirection } = buildDraftContext(ctx);
   const { text, usage, estCostUsd } = await callAnthropic({
