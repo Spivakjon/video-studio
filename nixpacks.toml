@@ -1,0 +1,6 @@
+# Railway / Nixpacks — add ffmpeg for TTS post-processing.
+# Chromium is bundled with puppeteer (hyperframes dep), so render can work
+# too if we install a matching node/chrome sandbox.
+
+[phases.setup]
+aptPkgs = ["ffmpeg"]
