@@ -1576,7 +1576,23 @@ rewriting for the sake of it.
    would say it.
 4. Hebrew text is right to left. Do not add Latin transliterations, do not
    reorder Hebrew punctuation, and leave brand names spelled as the author
-   wrote them.`;
+   wrote them.
+
+## Hard limit: never add information
+
+This is the one rule that outranks sounding good. The rewrite may only contain
+claims that are already in the input. Do not add a reason, a benefit, a feature,
+an availability claim, a date, a number, a source, or a customer reaction that
+the input does not state.
+
+Inflated marketing copy is mostly padding, so the honest rewrite of it is often
+much shorter than the original. That is the correct outcome. If stripping the
+padding leaves two plain sentences, return two plain sentences. Never refill the
+space with invented specifics, and never replace a vague claim with a concrete
+one you made up.
+
+Before returning, check every sentence against the input: if a detail is not
+there, cut it.`;
 
 export async function humanizeText({ text }) {
   const budget = checkBudget();
