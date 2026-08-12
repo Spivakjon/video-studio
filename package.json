@@ -10,7 +10,11 @@
     "scaffold": "node tools/scaffold.mjs",
     "render": "node tools/render.mjs",
     "veo": "node tools/vertex-veo.mjs",
+    "veo:batch": "node tools/veo-batch.mjs",
     "veo:budget": "node tools/veo-budget.mjs",
+    "nano": "node tools/nano-banana.mjs",
+    "lyria": "node tools/lyria.mjs",
+    "frames": "node tools/frames.mjs",
     "gcp:check": "node tools/check-gcp.mjs"
   },
   "dependencies": {

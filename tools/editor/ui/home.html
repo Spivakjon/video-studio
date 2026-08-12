@@ -94,6 +94,9 @@
       <button class="btn btn-ghost btn-lg" id="ai-gen-btn" title="תכתוב מה אתה רוצה — Claude יכין טיוטה לפי הפרויקט">
         <span>✨</span> צור מפרומפט
       </button>
+      <button class="btn btn-ghost btn-lg" id="script-btn" title="כתוב חופשי — Claude יבנה תסריט שוטים מלא">
+        <span>🎬</span> בנה תסריט
+      </button>
       <button class="btn btn-primary btn-lg" id="new-video-btn">
         <span>＋</span> סרטון חדש
       </button>
@@ -251,6 +254,34 @@
         <button class="btn btn-ghost" id="ai-interview-btn">ראיין אותי</button>
         <button class="btn btn-ghost" id="ai-estimate-btn">הערך עלות</button>
         <button class="btn btn-primary" id="ai-approve-btn" disabled>אשר וצור</button>
+      </div>
+    </div>
+  </div>
+</template>
+
+<template id="script-builder-modal-tpl">
+  <div class="modal-backdrop">
+    <div class="modal" style="max-width:760px">
+      <div class="modal-header">
+        <h2>🎬 בנה תסריט עם AI</h2>
+        <button class="modal-close modal-dismiss">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-field">
+          <div class="label">תאר את הסרטון שאתה רוצה — חופשי לגמרי</div>
+          <textarea class="textarea" id="sb-brief" data-dir="rtl" style="min-height:140px" placeholder="לדוגמה: טריילר דרמטי בסגנון הוליווד להזמנה ליום הולדת 5 לאיתי. הוא אוהב דינוזאורים. שיהיה מצחיק ומרגש, מסתיים בהזמנה לחגיגה בפארק הירקון ב-12.7 בשעה 17:00."></textarea>
+        </div>
+        <div class="form-field">
+          <div class="label">אורך משוער (שניות)</div>
+          <input class="input" id="sb-dur" data-dir="ltr" type="number" value="45" min="10" max="90" style="max-width:120px">
+        </div>
+        <div id="sb-status" style="font-size:13px;color:var(--mute-500);margin-top:8px"></div>
+        <div id="sb-output" style="margin-top:12px;max-height:46vh;overflow-y:auto"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost modal-dismiss">סגור</button>
+        <button class="btn btn-ghost" id="sb-copy" style="display:none">העתק JSON</button>
+        <button class="btn btn-primary" id="sb-generate">צור תסריט</button>
       </div>
     </div>
   </div>
@@ -972,11 +1003,69 @@ async function openAiGenModal() {
   });
 }
 
+function renderScript(script) {
+  const f = s => (s == null ? "" : String(s).replace(/</g, "&lt;"));
+  const scenes = (script.scenes || []).map(sc => {
+    const end = (Number(sc.startSec) || 0) + (Number(sc.durationSec) || 0);
+    return `<div style="border:1px solid var(--line);border-radius:var(--r-md);padding:10px 12px;margin-bottom:8px;background:var(--navy-900)">
+      <div style="display:flex;gap:8px;align-items:baseline;flex-wrap:wrap">
+        <strong>${f(sc.title)}</strong>
+        <span style="font-size:11px;color:var(--mute-600)">${f(sc.startSec)}s–${end}s</span>
+        <span style="font-size:11px;color:var(--mute-500);border:1px solid var(--line);border-radius:10px;padding:1px 8px">${f(sc.footageType)}</span>
+      </div>
+      <div style="font-size:12px;color:var(--mute-500);margin-top:6px" dir="ltr">🎥 ${f(sc.visual)}</div>
+      ${sc.onScreenText ? `<div style="font-size:13px;margin-top:6px" dir="rtl">📝 ${f(sc.onScreenText)}</div>` : ""}
+      ${sc.vo ? `<div style="font-size:13px;margin-top:4px;color:var(--mute-500)" dir="rtl">🎙️ ${f(sc.vo)} ${sc.voVoice ? `<span style="color:var(--mute-600)">(${f(sc.voVoice)})</span>` : ""}</div>` : ""}
+      ${sc.musicCue ? `<div style="font-size:11px;margin-top:4px;color:var(--mute-600)" dir="ltr">🎵 ${f(sc.musicCue)}</div>` : ""}
+    </div>`;
+  }).join("");
+  return `<div style="margin-bottom:10px">
+      <div style="font-weight:700;font-size:16px">${f(script.title)}</div>
+      <div style="font-size:12px;color:var(--mute-500)" dir="rtl">${f(script.formula)}</div>
+      <div style="font-size:11px;color:var(--mute-600);margin-top:2px" dir="ltr">🎵 ${f(script.music)} · ⏱ ${f(script.totalSec)}s</div>
+    </div>${scenes}`;
+}
+
+function openScriptBuilderModal() {
+  openModal("script-builder-modal-tpl", () => {
+    let lastScript = null;
+    const status = $("#sb-status"), out = $("#sb-output");
+    const genBtn = $("#sb-generate"), copyBtn = $("#sb-copy");
+    genBtn.addEventListener("click", async () => {
+      const brief = $("#sb-brief").value.trim();
+      if (!brief) { toast("כתוב קודם תיאור", "err"); return; }
+      genBtn.disabled = true; status.textContent = "Claude כותב תסריט…"; out.innerHTML = "";
+      try {
+        const r = await fetch("/api/ai/script", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ brief, durationSec: Number($("#sb-dur").value) || 45 })
+        }).then(x => x.json());
+        if (r.error) { status.textContent = "שגיאה: " + r.error; }
+        else {
+          lastScript = r.script;
+          out.innerHTML = renderScript(r.script);
+          const rem = r.budget ? r.budget.remainingUsd : "?";
+          status.textContent = `נוצר · עלות ~$${(r.estCostUsd || 0).toFixed(3)} · נשאר $${rem} מתקציב ה-AI`;
+          copyBtn.style.display = "";
+        }
+      } catch (e) { status.textContent = "שגיאה: " + e.message; }
+      genBtn.disabled = false;
+    });
+    copyBtn.addEventListener("click", () => {
+      if (!lastScript) return;
+      navigator.clipboard.writeText(JSON.stringify(lastScript, null, 2));
+      toast("התסריט הועתק (JSON)", "ok");
+    });
+  });
+}
+
 window.openBPModal = openBPModal;
 window.openNewVideoModal = openNewVideoModal;
 window.openAiGenModal = openAiGenModal;
+window.openScriptBuilderModal = openScriptBuilderModal;
 $("#new-video-btn").addEventListener("click", openNewVideoModal);
 $("#ai-gen-btn").addEventListener("click", openAiGenModal);
+$("#script-btn").addEventListener("click", openScriptBuilderModal);
 
 loadAll().catch(e => toast("שגיאה בטעינה: " + e.message, "err"));
 </script>

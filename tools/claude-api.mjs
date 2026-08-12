@@ -543,6 +543,83 @@ export async function generateDraft(ctx) {
 }
 
 // ---------------------------------------------------------------------------
+// FREE-TEXT SHOOTING SCRIPT BUILDER
+// Free-language brief → structured cinematic shooting script (scenes with
+// footage type, visual prompt, Hebrew on-screen text + VO, music cue, timing).
+// This is the "free with AI" script builder — engine-agnostic blueprint that
+// can then be produced with Veo / Nano Banana / Lyria / TTS.
+// ---------------------------------------------------------------------------
+
+const SHOOTING_SCRIPT_SYSTEM_PROMPT = `You are a cinematic short-form video director.
+Turn the user's free-text brief into a precise SHOOTING SCRIPT for a vertical 9:16 short video.
+
+Output a SINGLE JSON object, no prose, no markdown fences:
+{
+  "title": "<short Hebrew working title>",
+  "formula": "<one Hebrew sentence: the narrative arc / hook structure>",
+  "totalSec": <number>,
+  "music": "<overall music direction in English, e.g. 'epic Top Gun brass, turning emotional at the end'>",
+  "scenes": [
+    {
+      "id": "s1",
+      "startSec": <number>,
+      "durationSec": <number>,
+      "title": "<short Hebrew label>",
+      "footageType": "veo-t2v" | "veo-i2v" | "nano-still" | "html-text",
+      "visual": "<rich ENGLISH prompt for the AI image/video engine — cinematic, specific>",
+      "onScreenText": "<Hebrew text shown on screen, or null>",
+      "vo": "<Hebrew voiceover/dialogue for this scene, or null>",
+      "voVoice": "<suggested voice name, or null>",
+      "musicCue": "<what the music does in this beat, English>"
+    }
+  ]
+}
+
+## footageType meanings (map to our engines)
+- "veo-t2v"  → Veo text-to-video. Use for any shot WITHOUT a real person's face (landscapes, vehicles, objects, crowds, abstract). Cheapest & safest.
+- "veo-i2v"  → Veo image-to-video, animates a provided still. Use when a specific real image must move.
+- "nano-still" → Nano Banana image (animated later with a Ken Burns push). Use for shots that must preserve a REAL person's face/identity from a reference photo.
+- "html-text" → pure HTML title/overlay card (black or over footage). Use for big Hebrew titles, end cards, breaking-news openers.
+
+## Hard rules
+- Hebrew for onScreenText and vo. English for visual and musicCue (engines perform far better in English).
+- NEVER render Hebrew inside AI footage — Hebrew always lives in html-text overlays.
+- POLICY: never put a real identifiable minor/child in a weapon/military/violent context. Frame children as heroic/wholesome (e.g. "cinematic aviator", not "fighter pilot in combat"). Faces of real people only via nano-still.
+- Scenes' startSec + durationSec must tile the timeline with no gaps, summing to totalSec.
+- Pair on-screen text and VO so they complement, never read identically.
+- Keep it cinematic and specific. Every visual prompt should be production-ready for the engine.
+- 5-9 scenes for a 30-50s video. Open with a hook in the first 2 seconds.`;
+
+export async function generateShootingScript({ brief, durationSec = 45, extraContext = "" }) {
+  const budget = checkBudget();
+  if (!budget.allowed) {
+    throw new Error(`Monthly AI budget exhausted: $${budget.spentUsd} of $${budget.capUsd}`);
+  }
+  if (!brief || !brief.trim()) throw new Error("brief is required");
+  const userMessage =
+    `# Target duration\n~${durationSec} seconds, vertical 9:16.\n\n` +
+    (extraContext ? `# Extra context\n${extraContext}\n\n` : "") +
+    `# Brief (free text, the user's own words)\n\n${brief}\n\n` +
+    `Write the full shooting script as JSON. Make it cinematic, specific, and production-ready.`;
+  const { text, usage, estCostUsd } = await callAnthropic({
+    system: SHOOTING_SCRIPT_SYSTEM_PROMPT,
+    userMessage,
+    maxTokens: 4000
+  });
+  const script = parseJsonLoose(text);
+  logUsage({
+    kind: "shooting-script",
+    briefPreview: brief.slice(0, 120),
+    model: MODEL,
+    inputTokens: usage.input_tokens,
+    outputTokens: usage.output_tokens,
+    estCostUsd,
+    sceneCount: (script.scenes || []).length
+  });
+  return { script, usage, estCostUsd, model: MODEL };
+}
+
+// ---------------------------------------------------------------------------
 // Fact-check pass (second call — catches hallucinated claims in the draft)
 // ---------------------------------------------------------------------------
 
@@ -1440,4 +1517,129 @@ export async function factCheckDraft({ projectMeta, contextMd, userPrompt, draft
   });
 
   return { review, usage, estCostUsd, model: MODEL };
+}
+
+// ---------------------------------------------------------------------------
+// Humanizer — strip AI writing tells from pasted text (costs money)
+//
+// Powers POST /api/humanize, used by the hidden /humanizer page on
+// spivakgroup.co.il. The system prompt is the humanizer skill verbatim
+// (shared/humanizer-skill.md, MIT, based on Wikipedia's "Signs of AI writing")
+// plus the house rules Jon already applies to Hebrew copy.
+//
+// The skill is ~30KB, so it is sent as a cached system block: the first call in
+// a 5-minute window pays for it, the rest read it at a tenth of the price.
+// ---------------------------------------------------------------------------
+
+export const HUMANIZER_MAX_INPUT_CHARS = 8000;
+
+let humanizerSkillCache = null;
+function loadHumanizerSkill() {
+  if (humanizerSkillCache !== null) return humanizerSkillCache;
+  const p = resolve(STUDIO_ROOT, "shared", "humanizer-skill.md");
+  humanizerSkillCache = existsSync(p) ? readFileSync(p, "utf8") : "";
+  if (!humanizerSkillCache) console.warn("  humanizer skill file missing:", p);
+  return humanizerSkillCache;
+}
+
+// Appended after the skill. Embedded mode (final text only) plus the three
+// Hebrew rules from the 2026-08-09 copy pass on spivakgroup.co.il.
+const HUMANIZER_HOUSE_RULES = `
+
+---
+
+## Operating mode for this request
+
+You are running in **embedded mode**. Run the draft, audit and final loop
+internally and output **only the final rewritten text**. No preface, no
+"here is the rewrite", no audit bullets, no summary of changes, no code fences,
+no surrounding quotation marks. The entire response is the rewritten text and
+nothing else.
+
+Keep the original language. Hebrew in, Hebrew out. English in, English out.
+Keep the original formatting where it carries meaning: line breaks, paragraph
+breaks and list structure survive unless a pattern above says otherwise.
+
+If the input is already clean, return it close to unchanged rather than
+rewriting for the sake of it.
+
+## Hebrew house rules (apply in addition to everything above)
+
+1. No long dashes in the output, in either language. Hebrew text must not
+   contain the em dash or en dash either. Use a comma, a period, a colon or
+   parentheses instead.
+2. Do not build sentence after sentence on the "not X, but Y" formula
+   ("לא X אלא Y", "זה לא רק X, זה Y"). One deliberate use in a long text is
+   fine; a run of them is a tell.
+3. No jargon in marketing or business copy: write PoC, MVP, RTL, multi-agent
+   and similar in plain business Hebrew, the way a non-technical business owner
+   would say it.
+4. Hebrew text is right to left. Do not add Latin transliterations, do not
+   reorder Hebrew punctuation, and leave brand names spelled as the author
+   wrote them.`;
+
+export async function humanizeText({ text }) {
+  const budget = checkBudget();
+  if (!budget.allowed) {
+    throw new Error(`AI budget exhausted for ${budget.monthKey}: spent $${budget.spentUsd} of $${budget.capUsd}`);
+  }
+  const input = String(text || "");
+  if (!input.trim()) throw new Error("text required");
+  if (input.length > HUMANIZER_MAX_INPUT_CHARS) {
+    throw new Error(`text too long: ${input.length} chars, max ${HUMANIZER_MAX_INPUT_CHARS}`);
+  }
+
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) throw new Error("ANTHROPIC_API_KEY not set in env");
+
+  const system = [
+    {
+      type: "text",
+      text: loadHumanizerSkill() + HUMANIZER_HOUSE_RULES,
+      cache_control: { type: "ephemeral" }
+    }
+  ];
+
+  const r = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01"
+    },
+    body: JSON.stringify({
+      model: MODEL,
+      max_tokens: 8000,
+      system,
+      messages: [{ role: "user", content: `Humanize the following text.\n\n<text>\n${input}\n</text>` }]
+    })
+  });
+  const payload = await r.json();
+  if (!r.ok) {
+    throw new Error(`Anthropic API ${r.status}: ${JSON.stringify(payload).slice(0, 500)}`);
+  }
+
+  const out = (payload.content || []).filter(c => c.type === "text").map(c => c.text).join("").trim();
+  const usage = payload.usage || { input_tokens: 0, output_tokens: 0 };
+  // Cache writes cost 1.25x an input token, cache reads 0.1x.
+  const cacheWrite = usage.cache_creation_input_tokens || 0;
+  const cacheRead = usage.cache_read_input_tokens || 0;
+  const estCostUsd = Number(
+    ((usage.input_tokens + cacheWrite * 1.25 + cacheRead * 0.1) / 1_000_000 * INPUT_USD_PER_MTOK +
+     usage.output_tokens / 1_000_000 * OUTPUT_USD_PER_MTOK).toFixed(4)
+  );
+
+  logUsage({
+    kind: "humanize",
+    model: MODEL,
+    inputChars: input.length,
+    outputChars: out.length,
+    inputTokens: usage.input_tokens,
+    cacheWriteTokens: cacheWrite,
+    cacheReadTokens: cacheRead,
+    outputTokens: usage.output_tokens,
+    estCostUsd
+  });
+
+  return { text: out, usage, estCostUsd, model: MODEL };
 }

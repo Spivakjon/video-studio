@@ -8,3 +8,5 @@ node_modules/
 videos/*/audio/raw/
 videos/*/.studio/snapshots/
 videos/*/renders/*.mp4
+__pycache__/
+.higgsfield/

@@ -21,7 +21,7 @@ import { resolve, dirname, basename, extname, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFileSync, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { estimateDraft, generateDraft, generateVideoPipeline, interviewUser, factCheckDraft, checkBudget as checkAiBudget } from "../claude-api.mjs";
+import { estimateDraft, generateDraft, generateVideoPipeline, interviewUser, factCheckDraft, checkBudget as checkAiBudget, generateShootingScript, humanizeText, HUMANIZER_MAX_INPUT_CHARS } from "../claude-api.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const STUDIO_ROOT = resolve(__dirname, "..", "..");
@@ -750,6 +750,100 @@ function mimeFor(path) {
 // Routes
 // =======================================================================
 
+// =======================================================================
+// Humanizer endpoint support (POST /api/humanize)
+//
+// Called from the hidden /humanizer page on spivakgroup.co.il. The URL is
+// unlisted rather than password protected, so the guards here are what keeps a
+// leaked link from becoming an open wallet: an origin allowlist, an input
+// length cap, a per-IP and global rate limit, and the shared monthly budget in
+// .ai/config.json. Any call that does not carry the owner token pings Jon on
+// Telegram.
+// =======================================================================
+
+const HUMANIZER_ORIGINS = new Set([
+  "https://www.spivakgroup.co.il",
+  "https://spivakgroup.co.il",
+  "https://spivak-studio-production.up.railway.app",
+  "http://localhost:4321",
+  "http://localhost:3000"
+]);
+
+// Sliding windows, in memory. A restart forgives everyone, which is fine: the
+// monthly budget cap is the real backstop.
+const HUMANIZER_PER_IP_LIMIT = 8;
+const HUMANIZER_PER_IP_WINDOW_MS = 10 * 60 * 1000;
+const HUMANIZER_GLOBAL_LIMIT = 40;
+const HUMANIZER_GLOBAL_WINDOW_MS = 60 * 60 * 1000;
+const humanizerHits = new Map();   // ip -> timestamps
+let humanizerGlobalHits = [];
+
+function humanizerClientIp(req) {
+  const fwd = req.headers["x-forwarded-for"];
+  if (typeof fwd === "string" && fwd.trim()) return fwd.split(",")[0].trim();
+  return req.socket?.remoteAddress || "unknown";
+}
+
+function humanizerRateCheck(ip) {
+  const now = Date.now();
+  humanizerGlobalHits = humanizerGlobalHits.filter(t => now - t < HUMANIZER_GLOBAL_WINDOW_MS);
+  if (humanizerGlobalHits.length >= HUMANIZER_GLOBAL_LIMIT) {
+    return { ok: false, reason: "global" };
+  }
+  const hits = (humanizerHits.get(ip) || []).filter(t => now - t < HUMANIZER_PER_IP_WINDOW_MS);
+  if (hits.length >= HUMANIZER_PER_IP_LIMIT) {
+    humanizerHits.set(ip, hits);
+    return { ok: false, reason: "ip" };
+  }
+  hits.push(now);
+  humanizerHits.set(ip, hits);
+  humanizerGlobalHits.push(now);
+  // Keep the map from growing without bound on a long-lived process.
+  if (humanizerHits.size > 500) {
+    for (const [k, v] of humanizerHits) {
+      if (!v.some(t => now - t < HUMANIZER_PER_IP_WINDOW_MS)) humanizerHits.delete(k);
+    }
+  }
+  return { ok: true };
+}
+
+async function notifyTelegram(text) {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  const chatId = process.env.HUMANIZER_ALERT_CHAT_ID;
+  if (!token || !chatId) return;
+  try {
+    const r = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, text, disable_web_page_preview: true })
+    });
+    if (!r.ok) {
+      console.warn("  telegram notify rejected:", r.status, (await r.text()).slice(0, 200));
+    }
+  } catch (e) {
+    console.warn("  telegram notify failed:", e.message);
+  }
+}
+
+function humanizerCorsHeaders(origin) {
+  const allowed = origin && HUMANIZER_ORIGINS.has(origin);
+  return {
+    "Access-Control-Allow-Origin": allowed ? origin : "null",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Max-Age": "86400",
+    "Vary": "Origin"
+  };
+}
+
+function sendHumanizerJson(res, origin, status, obj) {
+  res.writeHead(status, {
+    "Content-Type": "application/json; charset=utf-8",
+    ...humanizerCorsHeaders(origin)
+  });
+  res.end(JSON.stringify(obj));
+}
+
 const server = createServer(async (req, res) => {
   try {
     const url = new URL(req.url, `http://localhost:${PORT}`);
@@ -885,6 +979,72 @@ const server = createServer(async (req, res) => {
       return sendFile(res, p, "image/png");
     }
 
+    // --- API: humanizer (cross-origin, called by spivakgroup.co.il/humanizer)
+    if (path === "/api/humanize") {
+      const origin = req.headers.origin || "";
+      if (req.method === "OPTIONS") {
+        res.writeHead(204, humanizerCorsHeaders(origin));
+        return res.end();
+      }
+      if (req.method !== "POST") return sendHumanizerJson(res, origin, 405, { error: "POST only" });
+      if (origin && !HUMANIZER_ORIGINS.has(origin)) {
+        return sendHumanizerJson(res, origin, 403, { error: "origin not allowed" });
+      }
+      if (!process.env.ANTHROPIC_API_KEY) {
+        return sendHumanizerJson(res, origin, 500, { error: "ANTHROPIC_API_KEY not set on server" });
+      }
+
+      const ip = humanizerClientIp(req);
+      const rate = humanizerRateCheck(ip);
+      if (!rate.ok) {
+        return sendHumanizerJson(res, origin, 429, {
+          error: rate.reason === "global"
+            ? "העמוד עמוס כרגע. נסה שוב בעוד כמה דקות."
+            : "יותר מדי בקשות מהמכשיר הזה. נסה שוב בעוד כמה דקות."
+        });
+      }
+
+      let body;
+      try { body = JSON.parse((await readBody(req)).toString("utf8")); }
+      catch { return sendHumanizerJson(res, origin, 400, { error: "invalid JSON" }); }
+
+      const text = String(body.text || "");
+      if (!text.trim()) return sendHumanizerJson(res, origin, 400, { error: "text required" });
+      if (text.length > HUMANIZER_MAX_INPUT_CHARS) {
+        return sendHumanizerJson(res, origin, 400, {
+          error: `הטקסט ארוך מדי (${text.length} תווים). המקסימום הוא ${HUMANIZER_MAX_INPUT_CHARS}.`
+        });
+      }
+
+      // The owner token only silences the alert; it is not an access gate.
+      const ownerToken = process.env.HUMANIZER_OWNER_TOKEN || "";
+      const isOwner = Boolean(ownerToken) && String(body.owner || "") === ownerToken;
+
+      try {
+        const r = await humanizeText({ text });
+        if (!isOwner) {
+          const when = new Date().toLocaleString("he-IL", { timeZone: "Asia/Jerusalem" });
+          notifyTelegram(
+            `🧹 שימוש ב-humanizer שלא על ידך\n` +
+            `זמן: ${when}\n` +
+            `IP: ${ip}\n` +
+            `אורך: ${text.length} תווים · עלות: $${r.estCostUsd}\n` +
+            `דפדפן: ${String(req.headers["user-agent"] || "?").slice(0, 120)}\n\n` +
+            `תחילת הטקסט:\n${text.slice(0, 300)}`
+          );
+        }
+        return sendHumanizerJson(res, origin, 200, { text: r.text, estCostUsd: r.estCostUsd });
+      } catch (e) {
+        const msg = String(e.message || e);
+        console.warn("  humanize failed:", msg);
+        return sendHumanizerJson(res, origin, 500, {
+          error: msg.startsWith("AI budget exhausted")
+            ? "התקציב החודשי לשימוש ב-AI נגמר."
+            : "השכתוב נכשל. נסה שוב."
+        });
+      }
+    }
+
     // --- API: AI (Claude) — autonomous video generation
     //
     // Flow:
@@ -898,6 +1058,24 @@ const server = createServer(async (req, res) => {
 
     if (req.method === "GET" && path === "/api/ai/budget") {
       return sendJson(res, 200, { ...checkAiBudget(), hasKey: Boolean(process.env.ANTHROPIC_API_KEY) });
+    }
+    // Free-text AI shooting-script builder — brief → structured cinematic script
+    if (req.method === "POST" && path === "/api/ai/script") {
+      if (!process.env.ANTHROPIC_API_KEY) {
+        return sendJson(res, 400, { error: "ANTHROPIC_API_KEY not set on server" });
+      }
+      const body = JSON.parse((await readBody(req)).toString("utf8"));
+      if (!body.brief || !String(body.brief).trim()) return sendJson(res, 400, { error: "brief required" });
+      try {
+        const r = await generateShootingScript({
+          brief: String(body.brief),
+          durationSec: Number(body.durationSec) || 45,
+          extraContext: body.extraContext || ""
+        });
+        return sendJson(res, 200, { script: r.script, estCostUsd: r.estCostUsd, budget: checkAiBudget() });
+      } catch (e) {
+        return sendJson(res, 500, { error: String(e.message || e) });
+      }
     }
     if (req.method === "POST" && path === "/api/ai/interview") {
       if (!process.env.ANTHROPIC_API_KEY) {

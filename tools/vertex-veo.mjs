@@ -61,7 +61,13 @@ if (config.authMethod === "serviceAccount" && !existsSync(KEY_PATH)) {
 const projectName = arg("project");
 const input       = arg("input");
 const prompt      = arg("prompt");
-const duration    = parseInt(arg("duration", "6"), 10);
+const SUPPORTED_DURATIONS = [4, 6, 8];
+let duration      = parseInt(arg("duration", "6"), 10);
+if (!SUPPORTED_DURATIONS.includes(duration)) {
+  const snapped = SUPPORTED_DURATIONS.reduce((a, b) => Math.abs(b - duration) < Math.abs(a - duration) ? b : a);
+  console.error(`  ⚠ duration ${duration}s not supported by Veo (only ${SUPPORTED_DURATIONS.join("/")}s) — using ${snapped}s.`);
+  duration = snapped;
+}
 const aspect      = arg("aspect", "9:16");
 const model       = arg("model", config.defaultModel);
 const output      = arg("output");
@@ -257,7 +263,16 @@ const elapsedSec = ((Date.now() - startTime) / 1000).toFixed(0);
 console.log(` done (${elapsedSec}s)`);
 
 if (finalOp.error) {
-  console.error("  ✗ Operation error:", JSON.stringify(finalOp.error).slice(0, 600));
+  const msg = (finalOp.error.message || "") + JSON.stringify(finalOp.error);
+  if (/responsible ai|sensitive|usage guidelines|violat/i.test(msg)) {
+    console.error("  ✗ Blocked by Veo safety filter (Responsible AI).");
+    console.error("    → Rephrase: avoid weapons/military+children, ethnic/religious descriptors,");
+    console.error("      and words like 'chaos/avalanche/panic'. Use neutral, wholesome wording.");
+  } else if (finalOp.error.code === 8 || /high load|unavailable|try again/i.test(msg)) {
+    console.error("  ✗ Veo is busy (high load). Transient — just run the same command again.");
+  } else {
+    console.error("  ✗ Operation error:", JSON.stringify(finalOp.error).slice(0, 600));
+  }
   process.exit(1);
 }
 
@@ -268,7 +283,14 @@ const videos =
   finalOp.response?.videos ||
   [];
 if (!videos.length) {
-  console.error("  ✗ No videos in response:", JSON.stringify(finalOp.response).slice(0, 600));
+  const respStr = JSON.stringify(finalOp.response || {});
+  if (/raiMediaFiltered|filtered out|usage guidelines/i.test(respStr)) {
+    console.error("  ✗ Output blocked by Veo safety filter (no charge).");
+    console.error("    → Rephrase the prompt (avoid weapons/military+children, ethnic/religious");
+    console.error("      descriptors, and 'chaos/avalanche/panic'-type words).");
+  } else {
+    console.error("  ✗ No videos in response:", respStr.slice(0, 600));
+  }
   process.exit(1);
 }
 const v = videos[0].video || videos[0];

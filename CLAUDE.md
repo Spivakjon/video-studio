@@ -125,6 +125,29 @@ Only two acceptable treatments for a product shot:
 
 Before any Veo call on a product asset, ask the user: "This animates the product itself — stick with GSAP, or go to character treatment?"
 
+## 2026-05 additions — vertical social (9:16) + multi-engine + new tools
+
+**New tools (run from project root):**
+```bash
+npm run veo:batch -- --project NAME --shotlist shots.json [--yes] [--max-usd N]  # batch Veo: auto-retry on high-load, duration-snap to {4,6,8}, RAI-skip, budget-capped, summary. Prefer over hand bash-loops.
+npm run nano -- --project NAME --input X.png --prompt "..." --output assets/Y.png  # Nano Banana (gemini-2.5-flash-image) — face-preserving stills, reframes, product stills
+npm run lyria -- --project NAME --prompt "..." --output audio/m.wav               # Lyria music (Vertex), ~$0.06/30s instrumental
+npm run frames -- NAME path.mp4 --n 5            # extract verification frames (or --at 2,11,30)
+```
+Dashboard: **"🎬 בנה תסריט"** button → free-text AI shooting-script builder (`POST /api/ai/script`, `claude-api.generateShootingScript`).
+
+**Vertical social/trailer flow (NOT the 1920×1080 template flow):** build `videos/<name>/index.html` by hand — full-bleed `<video muted playsinline>` clips on track 0, Hebrew text overlays on track 1, transitions track 3, ONE pre-mixed `audio/master.wav`. Add `@font-face` for Heebo/Rubik (copy from `videos/lavi-pilot/assets/fonts/`) — NOT auto-resolved in hyperframes 0.6.x. Persistent brand logo = a non-clip element, always visible.
+
+**Footage routing:** Veo t2v for faceless shots (vehicles/crowds/landscapes); **Nano Banana still → Ken Burns** for any real face/identity (Veo can't hold a consistent face across cuts); **real product photo → Ken Burns** (NOT Veo — product rule); **Higgsfield** (manual or Cloud API, `HF_API_KEY`+`HF_API_SECRET`) for character-consistent realistic people + camera presets.
+
+**Audio:** pre-mix with ffmpeg `audio/mix.filtergraph` — music bed + TTS VO; `acrossfade` for continuous music; MUTE all video clips so the audio is 100% controlled/Hebrew.
+
+**RAI / safety gotchas:** BLOCKED → real child + weapon/military; ethnic/religious descriptors ("Jewish features"); words like "chaos/avalanche/panic". WORKS → "cinematic heroic aviator" not "fighter pilot in combat"; "Israeli Sabra Mediterranean, olive skin, dark wavy hair"; heavily blurred bg + "no text/signs/logos" to kill gibberish signage. Veo durations: 4/6/8 only (tools auto-snap).
+
+**Tricks:** WhatsApp/IG thumbnail = first frame (they ignore embedded cover) → prepend a ~0.8s poster flash as frame 0. Baby/child voice = male TTS (Puck) + ffmpeg `asetrate` pitch-up (~+30-40%) + `atempo` to keep duration.
+
+**⚠️ Rule violated 2026-05-29:** `videos/kikkaboo-babyland/clips/p-carseat.mp4` + `p-travelsystem.mp4` used Veo i2v on real SKUs (against the product rule above). Replace with static Ken Burns of the real product photos.
+
 ## When the user asks for edits to an existing video
 
 - Prefer the web editor at http://localhost:3003/edit?project=<name>. Most text changes happen there.
@@ -142,3 +165,25 @@ The user's global memory (`~/.claude/...`) already contains:
 - This video-studio reference
 
 Respect those rules in every session; don't ask the user to repeat them.
+
+## 2026-08 — humanizer endpoint (`POST /api/humanize`)
+
+This service also backs the unlisted `/humanizer` page on
+**spivakgroup.co.il** (`C:\dev\spivak-studio\src\pages\humanizer.astro`). The
+page is static, so this is where the Claude call happens: it already holds
+`ANTHROPIC_API_KEY` and the shared `$50`/month cap in `.ai/config.json`.
+
+- `claude-api.humanizeText({ text })` sends `shared/humanizer-skill.md` (the
+  humanizer skill verbatim, MIT, from Wikipedia's "Signs of AI writing") plus
+  Jon's Hebrew house rules as a **cached** system block, and returns only the
+  rewritten text (the skill's "embedded mode"). First call in a 5-minute window
+  costs ~$0.03, the rest ~$0.004 because the 30KB prompt is cached.
+- Guards, because the page URL is unlisted rather than password protected:
+  origin allowlist (`HUMANIZER_ORIGINS`), 8000-char input cap, 8 calls per IP
+  per 10 min, 40 calls per hour overall, and the monthly budget.
+- `HUMANIZER_OWNER_TOKEN` marks Jon's own browser (he opens
+  `/humanizer#me=TOKEN` once and it is stored in `localStorage`). Any call
+  **without** it pings him on Telegram via `TELEGRAM_BOT_TOKEN` +
+  `HUMANIZER_ALERT_CHAT_ID` (272600204). The token silences the alert, it does
+  not gate access.
+- Adding an origin means editing `HUMANIZER_ORIGINS` in `tools/editor/server.mjs`.
