@@ -1560,8 +1560,12 @@ Keep the original language. Hebrew in, Hebrew out. English in, English out.
 Keep the original formatting where it carries meaning: line breaks, paragraph
 breaks and list structure survive unless a pattern above says otherwise.
 
-If the input is already clean, return it close to unchanged rather than
-rewriting for the sake of it.
+Return the text nearly unchanged only when you genuinely cannot find any of the
+patterns above in it. Promotional openers, copula avoidance, filler like "it is
+important to note", vague authority claims and inflated significance are always
+worth rewriting: text carrying any of them must come back rewritten, never
+echoed back as it arrived. Returning the input verbatim is a failure unless the
+input was already clean.
 
 ## Hebrew house rules (apply in addition to everything above)
 
